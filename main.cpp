@@ -16,4 +16,5 @@ int main(int argc, const char* const argv[]) {
 		DX12_go(10);
 		DX12_deInit();
 	}
+	return 0;
 }

@@ -1,5 +1,7 @@
 #include "bk_dx12.h"
 #include "../utils.h"
+#include "bk_dx12_utils.h"
+
 #include <iostream>
 #include <chrono>
 #define WIN32_LEAN_AND_MEAN
@@ -35,191 +37,10 @@ using namespace Microsoft::WRL;
 // D3D12 extension library.
 #include "d3dx12.h"
 
-// From DXSampleHelper.h 
-// Source: https://github.com/Microsoft/DirectX-Graphics-Samples
-inline void ThrowIfFailed(HRESULT hr)
-{
-	if (FAILED(hr))
-	{
-		BAIL
-	}
-}
-
-
-// Assign a name to the object to aid with debugging.
-#if defined(_DEBUG) || defined(DBG)
-inline void SetName(ID3D12Object* pObject, LPCWSTR name)
-{
-	pObject->SetName(name);
-}
-inline void SetNameIndexed(ID3D12Object* pObject, LPCWSTR name, UINT index)
-{
-	WCHAR fullName[50];
-	if (swprintf_s(fullName, L"%s[%u]", name, index) > 0)
-	{
-		pObject->SetName(fullName);
-	}
-}
-#else
-inline void SetName(ID3D12Object*, LPCWSTR)
-{
-}
-inline void SetNameIndexed(ID3D12Object*, LPCWSTR, UINT)
-{
-}
-#endif
-
-
-// Naming helper for ComPtr<T>.
-// Assigns the name of the variable as the name of the object.
-// The indexed variant will include the index in the name of the object.
-#define NAME_D3D12_OBJECT(x) SetName((x).Get(), L#x)
-#define NAME_D3D12_OBJECT_INDEXED(x, n) SetNameIndexed((x)[n].Get(), L#x, n)
-
-ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp)
-{
-	ComPtr<IDXGIFactory4> dxgiFactory;
-	UINT createFactoryFlags = 0;
-#if defined(_DEBUG)
-	createFactoryFlags = DXGI_CREATE_FACTORY_DEBUG;
-#endif
-
-	ThrowIfFailed(CreateDXGIFactory2(createFactoryFlags, IID_PPV_ARGS(&dxgiFactory)));
-	ComPtr<IDXGIAdapter1> dxgiAdapter1;
-	ComPtr<IDXGIAdapter4> dxgiAdapter4;
-
-	if (useWarp)
-	{
-		ThrowIfFailed(dxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&dxgiAdapter1)));
-		ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
-	}
-	else
-	{
-		SIZE_T maxDedicatedVideoMemory = 0;
-		for (UINT i = 0; dxgiFactory->EnumAdapters1(i, &dxgiAdapter1) != DXGI_ERROR_NOT_FOUND; ++i)
-		{
-			DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
-			dxgiAdapter1->GetDesc1(&dxgiAdapterDesc1);
-
-			std::wcout << "Adapter " << dxgiAdapterDesc1.DeviceId << " - " << dxgiAdapterDesc1.Description << ", FB: " << dxgiAdapterDesc1.DedicatedVideoMemory << std::endl;
-			// Check to see if the adapter can create a D3D12 device without actually 
-			// creating it. The adapter with the largest dedicated video memory is favored.
-			if ((dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0 &&
-				SUCCEEDED(D3D12CreateDevice(dxgiAdapter1.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr)) &&
-				dxgiAdapterDesc1.DedicatedVideoMemory > maxDedicatedVideoMemory)
-			{
-				maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
-				ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
-			}
-		}
-	}
-	DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
-	dxgiAdapter4->GetDesc1(&dxgiAdapterDesc1);
-	std::cout << "Using Adapter:" << dxgiAdapterDesc1.DeviceId << std::endl;
-
-	return dxgiAdapter4;
-}
-ComPtr<ID3D12Device2> CreateDevice(ComPtr<IDXGIAdapter4> adapter)
-{
-	ComPtr<ID3D12Device2> d3d12Device2;
-	ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device2)));
-	HRESULT WINAPI D3D12CreateDevice(
-		_In_opt_  IUnknown * pAdapter,
-		D3D_FEATURE_LEVEL MinimumFeatureLevel,
-		_In_      REFIID            riid,
-		_Out_opt_ void** ppDevice
-	);
-	// Enable debug messages in debug mode.
-#if defined(_DEBUG)
-	ComPtr<ID3D12InfoQueue> pInfoQueue;
-	if (SUCCEEDED(d3d12Device2.As(&pInfoQueue)))
-	{
-		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
-		// Suppress whole categories of messages
-	  //D3D12_MESSAGE_CATEGORY Categories[] = {};
-
-	  // Suppress messages based on their severity level
-		D3D12_MESSAGE_SEVERITY Severities[] =
-		{
-			D3D12_MESSAGE_SEVERITY_INFO
-		};
-
-		// Suppress individual messages by their ID
-		D3D12_MESSAGE_ID DenyIds[] = {
-			D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
-			D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
-			D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
-		};
-
-		D3D12_INFO_QUEUE_FILTER NewFilter = {};
-		//NewFilter.DenyList.NumCategories = _countof(Categories);
-		//NewFilter.DenyList.pCategoryList = Categories;
-		NewFilter.DenyList.NumSeverities = _countof(Severities);
-		NewFilter.DenyList.pSeverityList = Severities;
-		NewFilter.DenyList.NumIDs = _countof(DenyIds);
-		NewFilter.DenyList.pIDList = DenyIds;
-
-		ThrowIfFailed(pInfoQueue->PushStorageFilter(&NewFilter));
-	}
-#endif
-
-	return d3d12Device2;
-}
-
-ComPtr<ID3D12CommandQueue> CreateCommandQueue(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type)
-{
-	ComPtr<ID3D12CommandQueue> d3d12CommandQueue;
-
-	D3D12_COMMAND_QUEUE_DESC desc = {};
-	desc.Type = type;
-	desc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	desc.NodeMask = 0;
-
-	ThrowIfFailed(device->CreateCommandQueue(&desc, IID_PPV_ARGS(&d3d12CommandQueue)));
-
-	return d3d12CommandQueue;
-}
-
-// Compute objects.
-ComPtr<ID3D12CommandQueue> m_computeCommandQueue;
-ComPtr<ID3D12CommandAllocator> m_computeAllocator;
-ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
-ComPtr<ID3D12RootSignature> m_computeRootSignature;
-ComPtr<ID3D12PipelineState> m_computeState;
-// Synchronization objects.
-ComPtr<ID3D12Fence>	m_computeFence;
-UINT64 m_computeFenceValue;
+std::shared_ptr <DxInfo> dxInfo;
 
 int DX12_init() {
-
-	// The number of swap chain back buffers.
-	const uint8_t g_NumFrames = 3;
-	// Use WARP adapter
-	bool g_UseWarp = false;
-
-	uint32_t g_ClientWidth = 1280;
-	uint32_t g_ClientHeight = 720;
-
-	// Set to true once the DX12 objects have been initialized.
-	bool g_IsInitialized = false;
-	// Window handle.
-	HWND g_hWnd;
-	// Window rectangle (used to toggle fullscreen state).
-	RECT g_WindowRect;
-
-	// DirectX 12 Objects
-	ComPtr<ID3D12Device2> g_Device;
-	ComPtr<ID3D12CommandQueue> g_CommandQueue;
-	ComPtr<IDXGISwapChain4> g_SwapChain;
-	ComPtr<ID3D12Resource> g_BackBuffers[g_NumFrames];
-	ComPtr<ID3D12GraphicsCommandList> g_CommandList;
-	ComPtr<ID3D12CommandAllocator> g_CommandAllocators[g_NumFrames];
-	ComPtr<ID3D12DescriptorHeap> g_RTVDescriptorHeap;
-	UINT g_RTVDescriptorSize;
-	UINT g_CurrentBackBufferIndex;
+	dxInfo = std::make_shared<DxInfo>();
 
 #if defined(_DEBUG)
 	// Always enable the debug layer before doing anything DX12 related so all possible errors generated while creating DX12 objects are caught by the debug layer.
@@ -229,21 +50,22 @@ int DX12_init() {
 #endif
 
 	ComPtr<IDXGIAdapter4>  adapter = GetAdapter(false);
-
-	ComPtr<ID3D12Device2> device = CreateDevice(adapter);
-	m_computeCommandQueue = CreateCommandQueue(device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-	NAME_D3D12_OBJECT(m_computeCommandQueue);
-	std::cout << "Created Cmd Queue: " << m_computeCommandQueue << std::endl;
-
-
-
+	{
+		DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
+		adapter->GetDesc1(&dxgiAdapterDesc1);
+		std::cout << "Using Adapter:" << dxgiAdapterDesc1.DeviceId << std::endl;
+	}
+	dxInfo->device = CreateDevice(adapter);
+	dxInfo->m_computeCommandQueue = CreateCommandQueue(dxInfo->device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+	NAME_D3D12_OBJECT(dxInfo->m_computeCommandQueue);
+	std::cout << "Created Cmd Queue: " << dxInfo->m_computeCommandQueue << std::endl;
 
 	{
 		//root sigs
 		D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
 		featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 
-		if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+		if (FAILED(dxInfo->device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
 		{
 			featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
 		}
@@ -273,19 +95,19 @@ int DX12_init() {
 		ComPtr<ID3DBlob> error;
 
 		ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, featureData.HighestVersion, &signature, &error));
-		ThrowIfFailed(device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&m_computeRootSignature)));
-		NAME_D3D12_OBJECT(m_computeRootSignature);
+		ThrowIfFailed(dxInfo->device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&dxInfo->m_computeRootSignature)));
+		NAME_D3D12_OBJECT(dxInfo->m_computeRootSignature);
 
 	}
 
 
-	ThrowIfFailed(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&m_computeAllocator)));
-	ThrowIfFailed(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, m_computeAllocator.Get(), nullptr, IID_PPV_ARGS(&m_computeCommandList)));
-	ThrowIfFailed(device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&m_computeFence)));
-	m_computeFenceValue = 0;
-	SetName(m_computeCommandList.Get(), L"m_computeCommandLists (compute queue)");
-	SetName(m_computeAllocator.Get(), L"m_computeAllocator");
-	m_computeCommandList->Close();
+	ThrowIfFailed(dxInfo->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&dxInfo->m_computeAllocator)));
+	ThrowIfFailed(dxInfo->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, dxInfo->m_computeAllocator.Get(), nullptr, IID_PPV_ARGS(&dxInfo->m_computeCommandList)));
+	ThrowIfFailed(dxInfo->device->CreateFence(0, D3D12_FENCE_FLAG_SHARED, IID_PPV_ARGS(&dxInfo->m_computeFence)));
+	dxInfo->m_computeFenceValue = 0;
+	SetName(dxInfo->m_computeCommandList.Get(), L"m_computeCommandLists (compute queue)");
+	SetName(dxInfo->m_computeAllocator.Get(), L"m_computeAllocator");
+	dxInfo->m_computeCommandList->Close();
 
 	// Create the pipeline states, which includes compiling and loading shaders.
 	{
@@ -307,12 +129,13 @@ int DX12_init() {
 		const auto result = D3DCompile(shaderString.data(), shaderString.size(), "SimpleShader", nullptr, nullptr, "CSMain", "cs_5_0", compileFlags, 0, &computeShader, &errors);
 
 		if (FAILED(result)) {
-			if(errors){
+			if (errors) {
 				std::shared_ptr<char[]> ebuf(new char[errors->GetBufferSize()]);
 				std::memcpy(ebuf.get(), errors->GetBufferPointer(), errors->GetBufferSize());
 				std::cerr << "DX shader compile error " << ebuf << std::endl;
-			}else{
-				std::cerr << "DX shader compile issue, no errors reported "<< std::endl;
+			}
+			else {
+				std::cerr << "DX shader compile issue, no errors reported " << std::endl;
 			}
 			BAIL
 		}
@@ -321,18 +144,18 @@ int DX12_init() {
 
 		// Describe and create the compute pipeline state object (PSO).
 		D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc = {};
-		computePsoDesc.pRootSignature = m_computeRootSignature.Get();
+		computePsoDesc.pRootSignature = dxInfo->m_computeRootSignature.Get();
 		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
 
-		ThrowIfFailed(device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeState)));
-		NAME_D3D12_OBJECT(m_computeState);
+		ThrowIfFailed(dxInfo->device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&dxInfo->m_computeState)));
+		NAME_D3D12_OBJECT(dxInfo->m_computeState);
 	}
 
 	return 0;
 }
 
 
-std::chrono::nanoseconds WaitForFenceValue(ComPtr<ID3D12Fence> fence, uint64_t fenceValue, 
+std::chrono::nanoseconds WaitForFenceValue(ComPtr<ID3D12Fence> fence, uint64_t fenceValue,
 	std::chrono::milliseconds duration = std::chrono::milliseconds::max())
 {
 	HANDLE fenceEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -350,38 +173,68 @@ std::chrono::nanoseconds WaitForFenceValue(ComPtr<ID3D12Fence> fence, uint64_t f
 void DX12_go(size_t runs)
 {
 	// Run the particle simulation using the compute shader.
-	ID3D12GraphicsCommandList* pCommandList = m_computeCommandList.Get();
-	ID3D12CommandAllocator* pCommandAllocator = m_computeAllocator.Get();
+	ID3D12GraphicsCommandList* pCommandList = dxInfo->m_computeCommandList.Get();
+	ID3D12CommandAllocator* pCommandAllocator = dxInfo->m_computeAllocator.Get();
 	//PIXScopedEvent(pCommandList, 0, "Simulation step");
 	ThrowIfFailed(pCommandAllocator->Reset());
-	ThrowIfFailed(pCommandList->Reset(pCommandAllocator, m_computeState.Get()));
-	pCommandList->SetPipelineState(m_computeState.Get());
-	pCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
+	ThrowIfFailed(pCommandList->Reset(pCommandAllocator, dxInfo->m_computeState.Get()));
+	pCommandList->SetPipelineState(dxInfo->m_computeState.Get());
+	pCommandList->SetComputeRootSignature(dxInfo->m_computeRootSignature.Get());
 	pCommandList->Dispatch(1, 1, 1);
 
 	//pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pUavResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 
-
+		// Close and execute the command list.
 	ThrowIfFailed(pCommandList->Close());
-	// Close and execute the command list.
+
 	ID3D12CommandList* ppCommandLists[] = { pCommandList };
-	std::cout << "Dispatch" << std::endl;
-	m_computeCommandQueue->ExecuteCommandLists(1, { ppCommandLists });
-	m_computeFenceValue++;
-	m_computeCommandQueue->Signal(m_computeFence.Get(), m_computeFenceValue);
-	
-	WaitForFenceValue(m_computeFence.Get(), m_computeFenceValue);
-	std::cout << "Done" << std::endl;
+
+	for (size_t i = 0; i < runs; i++)
+	{
+		std::cout << "Submit\n";
+		auto t1 = std::chrono::high_resolution_clock::now();
+
+		dxInfo->m_computeCommandQueue->ExecuteCommandLists(1, { ppCommandLists });
+		dxInfo->m_computeFenceValue++;
+		dxInfo->m_computeCommandQueue->Signal(dxInfo->m_computeFence.Get(), dxInfo->m_computeFenceValue);
+
+		WaitForFenceValue(dxInfo->m_computeFence.Get(), dxInfo->m_computeFenceValue);
+		auto t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "Done " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << "ns \n";
+	}
+
 	//m_computeFenceValues[m_frameIndex] = m_computeFenceValue;
 	//m_computeCommandQueue->Signal(m_computeFences[m_frameIndex].Get(), m_computeFenceValue);
 	//PIXEndEvent(m_computeCommandQueue.Get());
-
 	// Wait for compute fence to finish
 
 }
-
+// this will only call release if an object exists (prevents exceptions calling release on non existant objects)
+#define SAFE_RELEASE(p) { if ( (p) ) { (p)->Release(); (p) = nullptr; } }
 int DX12_deInit()
 {
+
+	dxInfo.reset();
+	/*
+	SAFE_RELEASE(m_computeFence);
+
+	ThrowIfFailed(m_computeAllocator->Reset());
+	ThrowIfFailed(m_computeCommandList->Reset(m_computeAllocator.Get() , m_computeState.Get()));
+	ThrowIfFailed(m_computeCommandList->Close());
+
+	SAFE_RELEASE(m_computeCommandList);
+
+	SAFE_RELEASE(m_computeState);
+
+	SAFE_RELEASE(m_computeAllocator);
+
+	SAFE_RELEASE(m_computeCommandList);
+	SAFE_RELEASE(m_computeCommandQueue);
+
+	SAFE_RELEASE(m_computeRootSignature);
+	SAFE_RELEASE(device);
+	return 0;
+	*/
 	return 0;
 }
 
