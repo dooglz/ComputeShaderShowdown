@@ -59,6 +59,10 @@ ComPtr<ID3D12CommandQueue> CreateCommandQueue(ComPtr<ID3D12Device2> device, D3D1
 
 struct DxInfo {
 	ComPtr<ID3D12Device2> device;
+	//genric Queu for data work
+	ComPtr<ID3D12CommandQueue> directCommandQueue;
+	ComPtr<ID3D12CommandAllocator> directAllocator;
+	ComPtr<ID3D12GraphicsCommandList> directCommandList;
 	// Compute objects.
 	ComPtr<ID3D12CommandQueue> m_computeCommandQueue;
 	ComPtr<ID3D12CommandAllocator> m_computeAllocator;
@@ -72,8 +76,8 @@ struct DxInfo {
 	CD3DX12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE uavGpuHandle;
 	//CD3DX12_GPU_DESCRIPTOR_HANDLE cbvGpuHandle_dataIn;
-	ComPtr<ID3D12Resource> computeConstantUploadBuffer;
-	ComPtr<ID3D12Resource> computeConstantBuffer;
+	ComPtr<ID3D12Resource> computeUploadBuffer;
+	ComPtr<ID3D12Resource> computeReadbackBuffer;
 	ComPtr<ID3D12Resource> computeUAVBuffer;
 
 	// Synchronization objects.
