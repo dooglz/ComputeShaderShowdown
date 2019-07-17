@@ -11,16 +11,15 @@
 using namespace Microsoft::WRL;
 
 #include <d3d12.h>
+#include "d3dx12.h"
 #include <dxgi1_6.h>
 
 // Source: https://github.com/Microsoft/DirectX-Graphics-Samples
-inline void ThrowIfFailed(HRESULT hr)
+#define ThrowIfFailed(hr) if (FAILED(hr)){BAIL}
+/*inline void ThrowIfFailed(HRESULT hr)
 {
-	if (FAILED(hr))
-	{
-		BAIL
-	}
-}
+	if (FAILED(hr)){BAIL}
+}*/
 
 
 // Assign a name to the object to aid with debugging.
@@ -66,6 +65,17 @@ struct DxInfo {
 	ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
 	ComPtr<ID3D12RootSignature> m_computeRootSignature;
 	ComPtr<ID3D12PipelineState> m_computeState;
+	//data objects
+	ComPtr<ID3D12DescriptorHeap> CbvDHeap;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE cbvCpuHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE cbvGpuHandle;
+	CD3DX12_CPU_DESCRIPTOR_HANDLE uavCpuHandle;
+	CD3DX12_GPU_DESCRIPTOR_HANDLE uavGpuHandle;
+	//CD3DX12_GPU_DESCRIPTOR_HANDLE cbvGpuHandle_dataIn;
+	ComPtr<ID3D12Resource> computeConstantUploadBuffer;
+	ComPtr<ID3D12Resource> computeConstantBuffer;
+	ComPtr<ID3D12Resource> computeUAVBuffer;
+
 	// Synchronization objects.
 	ComPtr<ID3D12Fence>	m_computeFence;
 	UINT64 m_computeFenceValue;

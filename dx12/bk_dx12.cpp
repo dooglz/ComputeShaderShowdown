@@ -18,11 +18,6 @@
 #undef max
 #endif
 
-// In order to define a function called CreateWindow, the Windows macro needs to be undefined.
-#if defined(CreateWindow)
-#undef CreateWindow
-#endif
-
 // Windows Runtime Library. Needed for Microsoft::WRL::ComPtr<> template class.
 #include <wrl.h>
 using namespace Microsoft::WRL;
@@ -39,7 +34,19 @@ using namespace Microsoft::WRL;
 
 std::shared_ptr <DxInfo> dxInfo;
 
+// Compute root signature parameter offsets.
+enum ComputeRootParameters
+{
+	ComputeRootCBV = 0,
+	ComputeRootUAVTable,
+	ComputeRootParametersCount
+};
+
 int DX12_init() {
+
+	const int32_t bufferLength = 16384;
+	const uint32_t bufferSize = sizeof(int32_t) * bufferLength;
+	const uint32_t alignedBufferSize = AlignUp(bufferSize, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
 	dxInfo = std::make_shared<DxInfo>();
 
 #if defined(_DEBUG)
@@ -71,25 +78,25 @@ int DX12_init() {
 		}
 
 		// Create compute signature.
+
+		//CbvSrvUavTable
 		CD3DX12_DESCRIPTOR_RANGE1 ranges[2];
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE);
+		//Data in, Constant buffer view (CBV). Static - so can't be changed while shader is on a command list/bundle
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
 
+		//Data out. Data is volatile and can be changes, exept when while shader is on a command list/bundle.
+		//if broke, try RANGE_FLAG_DATA_VOLATILE, which would mean it can always be changed (more work for driver)
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 
-		// Compute root signature parameter offsets.
-		enum ComputeRootParameters
-		{
-			SrvUavTable,
-			RootConstants, // Root constants that give the shader information about the triangle vertices and culling planes.
-			ComputeRootParametersCount
-		};
 
 		CD3DX12_ROOT_PARAMETER1 computeRootParameters[ComputeRootParametersCount];
-		computeRootParameters[SrvUavTable].InitAsDescriptorTable(2, ranges);
-		computeRootParameters[RootConstants].InitAsConstants(4, 0);
+		computeRootParameters[ComputeRootCBV].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
+		computeRootParameters[ComputeRootUAVTable].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
+		//computeRootParameters[RootConstants].InitAsConstants(1,1);
 
+		D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 		CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC computeRootSignatureDesc;
-		computeRootSignatureDesc.Init_1_1(_countof(computeRootParameters), computeRootParameters);
+		computeRootSignatureDesc.Init_1_1(ComputeRootParametersCount, computeRootParameters,0, nullptr, rootSignatureFlags);
 
 		ComPtr<ID3DBlob> signature;
 		ComPtr<ID3DBlob> error;
@@ -99,7 +106,86 @@ int DX12_init() {
 		NAME_D3D12_OBJECT(dxInfo->m_computeRootSignature);
 
 	}
+	// Create a descriptor heap for the constant buffer.
+	{
+		{
+			D3D12_DESCRIPTOR_HEAP_DESC heapDesc = {};
+			heapDesc.NumDescriptors = 2;
+			heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+			// This flag indicates that this descriptor heap can be bound to the pipeline and that descriptors contained in it can be referenced by a root table.
+			heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+			ThrowIfFailed(dxInfo->device->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(&dxInfo->CbvDHeap)));
+			dxInfo->CbvDHeap->SetName(L"Constant Buffer View Descriptor Heap");
+		}
 
+		D3D12_RESOURCE_ALLOCATION_INFO rai;
+		rai.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		rai.SizeInBytes = alignedBufferSize;
+
+		// Create the constant buffer.
+		ThrowIfFailed(dxInfo->device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(rai),
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			nullptr,
+			IID_PPV_ARGS(&dxInfo->computeConstantUploadBuffer)));
+
+		ThrowIfFailed(dxInfo->device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(rai),
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			nullptr,
+			IID_PPV_ARGS(&dxInfo->computeConstantBuffer)));
+
+
+
+		// Describe and create a constant buffer view.
+		D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc[2];// = {};
+		cbvDesc[0].BufferLocation = dxInfo->computeConstantUploadBuffer->GetGPUVirtualAddress();
+		cbvDesc[0].SizeInBytes = alignedBufferSize;
+
+		dxInfo->cbvCpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE(dxInfo->CbvDHeap->GetCPUDescriptorHandleForHeapStart(), 0, 0);
+		dxInfo->cbvGpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(dxInfo->CbvDHeap->GetGPUDescriptorHandleForHeapStart(), 0, 0);
+		dxInfo->device->CreateConstantBufferView(cbvDesc, dxInfo->cbvCpuHandle);
+		
+		int32_t* payload;
+		// Initialize and map the constant buffers. We don't unmap this until the
+		// app closes. Keeping things mapped for the lifetime of the resource is okay.
+		ThrowIfFailed(dxInfo->computeConstantUploadBuffer->Map(0, nullptr, reinterpret_cast<void**>(&payload)));
+		//memcpy(mMappedWVPBuffer, &mWVPData, sizeof(mWVPData));
+		for (uint32_t k = 1; k < bufferLength; k++) {
+			payload[k] = (k % 10);//rand();
+		}
+		dxInfo->computeConstantUploadBuffer->Unmap(0, nullptr);
+
+		//CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle0(CbvDHeap->GetCPUDescriptorHandleForHeapStart(), 0, m_srvUavDescriptorSize);
+
+
+		ThrowIfFailed(dxInfo->device->CreateCommittedResource(
+			&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+			D3D12_HEAP_FLAG_NONE,
+			&CD3DX12_RESOURCE_DESC::Buffer(rai, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+			nullptr,
+			IID_PPV_ARGS(&dxInfo->computeUAVBuffer)));
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+		uavDesc.Format = DXGI_FORMAT_UNKNOWN;
+		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		uavDesc.Buffer.FirstElement = 0;
+		uavDesc.Buffer.NumElements = bufferLength;
+		uavDesc.Buffer.StructureByteStride = sizeof(int32_t);
+		uavDesc.Buffer.CounterOffsetInBytes = 0;
+		uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+
+		UINT m_srvUavDescriptorSize = dxInfo->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		dxInfo->uavCpuHandle = CD3DX12_CPU_DESCRIPTOR_HANDLE (dxInfo->CbvDHeap->GetCPUDescriptorHandleForHeapStart(), 1, m_srvUavDescriptorSize);
+		dxInfo->uavGpuHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(dxInfo->CbvDHeap->GetGPUDescriptorHandleForHeapStart(),1, m_srvUavDescriptorSize);
+		dxInfo->device->CreateUnorderedAccessView(dxInfo->computeUAVBuffer.Get(), nullptr, &uavDesc, dxInfo->uavCpuHandle);
+
+	}
 
 	ThrowIfFailed(dxInfo->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&dxInfo->m_computeAllocator)));
 	ThrowIfFailed(dxInfo->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, dxInfo->m_computeAllocator.Get(), nullptr, IID_PPV_ARGS(&dxInfo->m_computeCommandList)));
@@ -120,13 +206,21 @@ int DX12_init() {
 		UINT compileFlags = 0;
 #endif
 		const std::string shaderString =
+			""
 			"#define blocksize 256\n"
-			"[numthreads(blocksize, 1, 1)]"
-			"void CSMain(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex){"
+			"struct Foo{int a;};\n"
+			"int dataIn[100]: register(b0);\n"
+			//"int dataOut[100]: register(u0);\n"
+			//"ConstantBuffer<Foo> dataIn : register(b0);//constbuf\n"
+			"RWStructuredBuffer<int> dataOut : register(u0);// UAV\n"
+			"[numthreads(blocksize, 1, 1)]\n"
+			"void CSMain(uint3 Gid : SV_GroupID, uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID, uint GI : SV_GroupIndex){\n"
+			"const int i = dataIn[0];\n"
+			"dataOut[0] = i;\n"
 			"}";
 
 		ComPtr<ID3DBlob> errors = nullptr;
-		const auto result = D3DCompile(shaderString.data(), shaderString.size(), "SimpleShader", nullptr, nullptr, "CSMain", "cs_5_0", compileFlags, 0, &computeShader, &errors);
+		const auto result = D3DCompile(shaderString.data(), shaderString.size(), "SimpleShader", nullptr, nullptr, "CSMain", "cs_5_1", compileFlags, 0, &computeShader, &errors);
 
 		if (FAILED(result)) {
 			if (errors) {
@@ -140,13 +234,13 @@ int DX12_init() {
 			BAIL
 		}
 		std::cout << "Shader compiled, Size: " << computeShader->GetBufferSize() << std::endl;
-		//D3DCompileFromFile("", nullptr, nullptr, "CSMain", "cs_5_0", compileFlags, 0, &computeShader, nullptr));
+		//D3DCompileFromFile("", nullptr, nullptr, "CSMain", "cs_5_1", compileFlags, 0, &computeShader, nullptr));
 
 		// Describe and create the compute pipeline state object (PSO).
 		D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc = {};
 		computePsoDesc.pRootSignature = dxInfo->m_computeRootSignature.Get();
 		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-
+		
 		ThrowIfFailed(dxInfo->device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&dxInfo->m_computeState)));
 		NAME_D3D12_OBJECT(dxInfo->m_computeState);
 	}
@@ -180,6 +274,14 @@ void DX12_go(size_t runs)
 	ThrowIfFailed(pCommandList->Reset(pCommandAllocator, dxInfo->m_computeState.Get()));
 	pCommandList->SetPipelineState(dxInfo->m_computeState.Get());
 	pCommandList->SetComputeRootSignature(dxInfo->m_computeRootSignature.Get());
+
+	ID3D12DescriptorHeap* ppHeaps[] = { dxInfo->CbvDHeap.Get() };
+	pCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
+
+
+	//pCommandList->SetComputeRootConstantBufferView(ComputeRootCBV, dxInfo->computeConstantBuffer->GetGPUVirtualAddress());
+	pCommandList->SetComputeRootDescriptorTable(ComputeRootCBV, dxInfo->cbvGpuHandle);
+	pCommandList->SetComputeRootDescriptorTable(ComputeRootUAVTable, dxInfo->uavGpuHandle);
 	pCommandList->Dispatch(1, 1, 1);
 
 	//pCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(pUavResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));

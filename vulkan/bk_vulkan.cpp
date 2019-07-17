@@ -143,6 +143,7 @@ struct sample_info info = {};
 	}
 	info.devices.clear();
 	vkDestroyInstance(info.inst, NULL);
+	return 0;
 }
 
 int VK_init() {
