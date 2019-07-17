@@ -1,7 +1,8 @@
 #include "vulkan/bk_vulkan.h"
 #include "dx12/bk_dx12.h"
-#define doVk false
+#define doVk true
 #define doDX12 true
+
 
 int main(int argc, const char* const argv[]) {
 	(void)argc;

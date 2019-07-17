@@ -566,7 +566,8 @@ void  VK_go(size_t runs) {
 
 
 	BAIL_ON_BAD_RESULT(vkMapMemory(device, memory, 0, memorySize, 0, (void**)&payload));
-	std::cout << payload[0] << "," << payload[1] << "," << payload[2] << "," << payload[3] << std::endl;
+	//std::cout << payload[0] << "," << payload[1] << "," << payload[2] << "," << payload[3] << std::endl;
+	std::cout << printSome(payload, bufferLength);
 	vkUnmapMemory(device, memory);
 
 

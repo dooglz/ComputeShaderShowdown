@@ -81,7 +81,7 @@ struct DxInfo {
 	ComPtr<ID3D12Resource> computeUAVBuffer;
 
 	// Synchronization objects.
-	ComPtr<ID3D12Fence>	m_computeFence;
-	UINT64 m_computeFenceValue;
+	ComPtr<ID3D12Fence> fence;
+	UINT64 fenceValue;
 };
 

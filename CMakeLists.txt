@@ -31,7 +31,7 @@ if(${ShdrShwdwn_DX12})
 endif(${ShdrShwdwn_DX12})
 
 
-add_executable(MAIN main.cpp  ${SOURCE_FILES})
+add_executable(MAIN main.cpp utils.h utils.cpp ${SOURCE_FILES})
 
 
 if(${ShdrShwdwn_DX12})
