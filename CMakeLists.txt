@@ -1,6 +1,5 @@
 cmake_minimum_required (VERSION 3.11)
 
-
 project (shader_showdown)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +8,24 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+
+option(ShdrShwdwn_CUDA "" ON)
+if(${ShdrShwdwn_CUDA})
+	#enable_language(CUDA)
+	find_package(CUDA REQUIRED)
+	file(GLOB CUDA_SOURCE_FILES cuda/*.cpp cuda/*.h)
+	source_group(CUDA FILES ${CUDA_SOURCE_FILES})
+	set(SOURCE_FILES ${SOURCE_FILES} ${CUDA_SOURCE_FILES})
+endif(${ShdrShwdwn_CUDA})
+
+
+option(ShdrShwdwn_OPENCL "" ON)
+if(${ShdrShwdwn_OPENCL})
+	find_package(OpenCL REQUIRED)
+	file(GLOB OPENCL_SOURCE_FILES opencl/*.cpp opencl/*.h)
+	source_group(OPENCL FILES ${OPENCL_SOURCE_FILES})
+	set(SOURCE_FILES ${SOURCE_FILES} ${OPENCL_SOURCE_FILES})
+endif(${ShdrShwdwn_OPENCL})
 
 option(ShdrShwdwn_VULKAN "" ON)
 
@@ -75,6 +92,16 @@ if(${ShdrShwdwn_VULKAN})
 	endif()
 endif(${ShdrShwdwn_VULKAN})
 
+if(${ShdrShwdwn_OPENCL})
+	target_include_directories(MAIN PRIVATE ${OpenCL_INCLUDE_DIRS})
+	target_link_libraries(MAIN ${OpenCL_LIBRARIES})
+endif(${ShdrShwdwn_OPENCL})
+
+if(${ShdrShwdwn_CUDA})
+	target_include_directories(MAIN PRIVATE ${CUDA_TOOLKIT_INCLUDE})
+	get_filename_component(CUDA_LIBRARY_DIR ${CUDA_CUDA_LIBRARY} DIRECTORY)  
+	target_link_libraries(MAIN ${CUDA_CUDART_LIBRARY} ${CUDA_CUDA_LIBRARY} "${CUDA_LIBRARY_DIR}/nvrtc.lib")
+endif(${ShdrShwdwn_CUDA})
 
 if(${MSVC})
       target_compile_options(MAIN PUBLIC /MP)
