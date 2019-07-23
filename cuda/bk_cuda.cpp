@@ -91,6 +91,7 @@ size_t size;
 CUfunction kernel_addr;
 
 int CUDA_init() {
+	traceEvent("CUDA Init");
 	{
 		int device_count = 0;
 		cudaDeviceProp deviceProp;
@@ -181,6 +182,7 @@ void CUDA_go(size_t runs) {
 	void* arr[] = { reinterpret_cast<void*>(&d_A), reinterpret_cast<void*>(&d_B),
 				   reinterpret_cast<void*>(&d_C),
 				   reinterpret_cast<void*>(&numElements) };
+	traceEvent("CUDA Start");
 	checkCudaErrors(cuLaunchKernel(kernel_addr, cudaGridSize.x, cudaGridSize.y,
 		cudaGridSize.z, /* grid dim */
 		cudaBlockSize.x, cudaBlockSize.y,
@@ -189,7 +191,7 @@ void CUDA_go(size_t runs) {
 		&arr[0],         /* arguments */
 		0));
 	checkCudaErrors(cuCtxSynchronize());
-
+	traceEvent("CUDA End");
 	// Copy the device result vector in device memory to the host result vector in host memory.
 	printf("Copy output data from the CUDA device to the host memory\n");
 	checkCudaErrors(cuMemcpyDtoH(h_C, d_C, size));

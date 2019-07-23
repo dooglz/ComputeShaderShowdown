@@ -25,7 +25,7 @@ std::string toString(int dt) {
 }
 
 int OPENCL_init() {
-
+	traceEvent("CL Init");
 	cl_int err;
 	std::vector< cl::Platform > platformList;
 	cl::Platform::get(&platformList);

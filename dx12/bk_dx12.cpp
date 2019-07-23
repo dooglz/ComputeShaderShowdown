@@ -47,7 +47,7 @@ const uint32_t alignedBufferSize = AlignUp(bufferSize, D3D12_DEFAULT_RESOURCE_PL
 
 int DX12_init() {
 
-
+	traceEvent("DX Init");
 	dxInfo = std::make_shared<DxInfo>();
 
 #if defined(_DEBUG)
@@ -285,7 +285,7 @@ void DX12_go(size_t runs)
 	pCommandList->Dispatch(512, 1, 1);
 	// Close and execute the command list.
 	ThrowIfFailed(pCommandList->Close());
-
+	traceEvent("DX upload");
 	//move data from upload buffer to uav
 	{
 		ThrowIfFailed(dxInfo->directAllocator->Reset());
@@ -300,7 +300,7 @@ void DX12_go(size_t runs)
 
 
 	ID3D12CommandList* ppCommandLists[] = { pCommandList };
-
+	traceEvent("DX execute");
 	for (size_t i = 0; i < runs; i++)
 	{
 		std::cout << "Submit\n";
@@ -309,7 +309,7 @@ void DX12_go(size_t runs)
 		WaitforQueueFinish(dxInfo->m_computeCommandQueue.Get());
 		std::cout << "Done " << endtimer(t1) << "ns \n";
 	}
-
+	traceEvent("DX readback");
 	//Upload Data back
 	{
 		ThrowIfFailed(dxInfo->directAllocator->Reset());

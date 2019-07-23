@@ -36,6 +36,8 @@ template <typename T> __forceinline T AlignUp(T value, size_t alignment)
 }
 
 
+void traceEvent(const std::string& evntTxt);
+
 #define chronoclock  std::chrono::high_resolution_clock
 std::chrono::time_point<chronoclock> startTimer();
 long long endtimer(std::chrono::time_point<chronoclock> tp);

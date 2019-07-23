@@ -21,7 +21,18 @@ endif(${ShdrShwdwn_CUDA})
 
 option(ShdrShwdwn_OPENCL "" ON)
 if(${ShdrShwdwn_OPENCL})
-	find_package(OpenCL REQUIRED)
+	#find_package(OpenCL REQUIRED)
+	#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/opencl/common-lib-amd-APPSDK-3.0/")
+	#include(Global-OpenCL)
+	##
+	set(OPENCL_DIR "${CMAKE_SOURCE_DIR}/../OpenCL-ICD-Loader/build/Release")
+	set(OpenCL_LIBRARIES "${OPENCL_DIR}/OpenCL.lib")
+	set(OpenCL_INCLUDE_DIRS "${OPENCL_DIR}")
+	##
+	#set(OPENCL_DIR "${CMAKE_SOURCE_DIR}/opencl/common-lib-amd-APPSDK-3.0/3-0")
+	#set(OpenCL_LIBRARIES "${OPENCL_DIR}/lib/x86_64/OpenCL.lib")
+	#set(OpenCL_INCLUDE_DIRS "${OPENCL_DIR}/include")
+	##
 	file(GLOB OPENCL_SOURCE_FILES opencl/*.cpp opencl/*.h)
 	source_group(OPENCL FILES ${OPENCL_SOURCE_FILES})
 	set(SOURCE_FILES ${SOURCE_FILES} ${OPENCL_SOURCE_FILES})
@@ -46,6 +57,9 @@ if(${ShdrShwdwn_DX12})
 	find_package(D3D12 REQUIRED)
 	set(SOURCE_FILES ${SOURCE_FILES} ${DX12_SOURCE_FILES})
 endif(${ShdrShwdwn_DX12})
+
+
+
 
 
 add_executable(MAIN main.cpp utils.h utils.cpp ${SOURCE_FILES})
@@ -104,7 +118,32 @@ if(${ShdrShwdwn_CUDA})
 endif(${ShdrShwdwn_CUDA})
 
 if(${MSVC})
-      target_compile_options(MAIN PUBLIC /MP)
+    target_compile_options(MAIN PUBLIC /MP)
+	target_link_libraries(MAIN "rpcrt4.lib")
+endif()
+
+include(CMakeDependentOption)
+CMAKE_DEPENDENT_OPTION(ShdrShwdwn_PIXRUNTIME "" ON ${MSVC} OFF)
+if(${MSVC} AND ${ShdrShwdwn_PIXRUNTIME})
+	find_program(NUGET nuget)
+	if(NOT NUGET)
+	  message(FATAL "Cannot find nuget command line tool.\nInstall it with e.g. choco install nuget.commandline")
+	else()
+		execute_process(
+			OUTPUT_VARIABLE stdo1 
+			ERROR_VARIABLE std2 
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+			COMMAND ${NUGET} Install WinPixEventRuntime -OutputDirectory ${CMAKE_BINARY_DIR}/
+		)
+		file(GLOB_RECURSE PIXINC ${CMAKE_BINARY_DIR}/WinPixEventRuntime*/**/pix3.h)
+		if(PIXINC)
+			get_filename_component(WinPixEventRuntimeIncludes ${PIXINC} DIRECTORY) 
+			get_filename_component(WinPixEventRuntimeIncludes ${WinPixEventRuntimeIncludes}/../ ABSOLUTE)
+			target_include_directories(MAIN PRIVATE ${WinPixEventRuntimeIncludes})
+			target_link_libraries(MAIN  "${WinPixEventRuntimeIncludes}/../bin/x64/WinPixEventRuntime.lib")
+		endif()
+endif()
+
 ENDIF()
 
 

@@ -13,6 +13,9 @@
 int main(int argc, const char* const argv[]) {
 	(void)argc;
 	(void)argv;
+	char a;
+	std::cin >> a;
+
 	if (doVk) {
 		std::cout << '\n' << std::string(80, '-') << "\nVULKAN\n";
 		VK_init();

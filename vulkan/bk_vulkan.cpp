@@ -147,7 +147,7 @@ struct sample_info info = {};
 }
 
 int VK_init() {
-
+	traceEvent("VK Init");
 	// initialize the VkApplicationInfo structure
 	VkApplicationInfo app_info = {};
 	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -554,6 +554,7 @@ void  VK_go(size_t runs) {
 	  0,
 	  0
 	};
+	traceEvent("VK Start");
 	for (size_t i = 0; i < runs; i++)
 	{
 		std::cout << "Submit\n";
@@ -563,7 +564,7 @@ void  VK_go(size_t runs) {
 		auto t2 = std::chrono::high_resolution_clock::now();
 		std::cout << "Done " << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() << "ns \n";
 	}
-
+	traceEvent("VK End");
 
 	BAIL_ON_BAD_RESULT(vkMapMemory(device, memory, 0, memorySize, 0, (void**)&payload));
 	//std::cout << payload[0] << "," << payload[1] << "," << payload[2] << "," << payload[3] << std::endl;
