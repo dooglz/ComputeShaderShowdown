@@ -10,7 +10,7 @@
 #endif
 
 #if defined(NDEBUG)
-#define BAIL fprintf(stderr, "Failure at %u %s\n", __LINE__, __FILE__); exit(-1);
+#define BAIL fprintf(stderr, "Failure at %u %s\n", __LINE__, __FILE__); assert(false);
 #else
 #define BAIL fprintf(stderr, "Failure at %u %s\n", __LINE__, __FILE__); assert(false);
 #endif

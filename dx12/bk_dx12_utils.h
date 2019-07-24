@@ -51,8 +51,8 @@ inline void SetNameIndexed(ID3D12Object*, LPCWSTR, UINT)
 // The indexed variant will include the index in the name of the object.
 #define NAME_D3D12_OBJECT(x) SetName((x).Get(), L#x)
 #define NAME_D3D12_OBJECT_INDEXED(x, n) SetNameIndexed((x)[n].Get(), L#x, n)
-
-ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp);
+//dev=0, choose fastest. else index from 1.
+ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp, unsigned char dev = 0);
 ComPtr<ID3D12Device2> CreateDevice(ComPtr<IDXGIAdapter4> adapter);
 ComPtr<ID3D12CommandQueue> CreateCommandQueue(ComPtr<ID3D12Device2> device, D3D12_COMMAND_LIST_TYPE type);
 

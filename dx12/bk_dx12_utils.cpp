@@ -9,7 +9,7 @@
 #include "d3dx12.h"
 
 
-ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp)
+ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp, unsigned char dev)
 {
 	ComPtr<IDXGIFactory4> dxgiFactory;
 	UINT createFactoryFlags = 0;
@@ -35,19 +35,29 @@ ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp)
 			dxgiAdapter1->GetDesc1(&dxgiAdapterDesc1);
 
 			std::wcout << "Adapter " << dxgiAdapterDesc1.DeviceId << " - " << dxgiAdapterDesc1.Description << ", FB: " << dxgiAdapterDesc1.DedicatedVideoMemory << std::endl;
-			// Check to see if the adapter can create a D3D12 device without actually 
-			// creating it. The adapter with the largest dedicated video memory is favored.
 			if ((dxgiAdapterDesc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0 &&
-				SUCCEEDED(D3D12CreateDevice(dxgiAdapter1.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr)) &&
-				dxgiAdapterDesc1.DedicatedVideoMemory > maxDedicatedVideoMemory)
-			{
-				maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
-				ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
+				SUCCEEDED(D3D12CreateDevice(dxgiAdapter1.Get(), D3D_FEATURE_LEVEL_11_0, __uuidof(ID3D12Device), nullptr))) {
+				if (dev != 0) {
+					if (dev == (i + 1)) {
+						ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
+					}
+				}
+				else
+				{
+					// Check to see if the adapter can create a D3D12 device without actually 
+					// creating it. The adapter with the largest dedicated video memory is favored.
+					if (dxgiAdapterDesc1.DedicatedVideoMemory > maxDedicatedVideoMemory)
+					{
+						maxDedicatedVideoMemory = dxgiAdapterDesc1.DedicatedVideoMemory;
+						ThrowIfFailed(dxgiAdapter1.As(&dxgiAdapter4));
+					}
+				}
 			}
+
 		}
 	}
 
-
+	BAIL_IF(dxgiAdapter4, nullptr);
 	return dxgiAdapter4;
 }
 ComPtr<ID3D12Device2> CreateDevice(ComPtr<IDXGIAdapter4> adapter)

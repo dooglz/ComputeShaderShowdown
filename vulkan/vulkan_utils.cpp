@@ -56,16 +56,13 @@ VkResult vkGetBestComputeQueueNPH(const VkPhysicalDevice& physicalDevice, uint32
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropertiesCount, NULL);
 
 	assert(queueFamilyPropertiesCount > 0);
-
-	VkQueueFamilyProperties* const queueFamilyProperties = (VkQueueFamilyProperties*)_alloca(sizeof(VkQueueFamilyProperties) * queueFamilyPropertiesCount);
-
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropertiesCount, queueFamilyProperties);
+	std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyPropertiesCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyPropertiesCount, queueFamilyProperties.data());
 
 	// first try and find a queue that has just the compute bit set
 	for (uint32_t i = 0; i < queueFamilyPropertiesCount; i++) {
 		// mask out the sparse binding bit that we aren't caring about (yet!) and the transfer bit
-		const VkQueueFlags maskedFlags = (~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT) &
-			queueFamilyProperties[i].queueFlags);
+		const VkQueueFlags maskedFlags = (~(VK_QUEUE_TRANSFER_BIT | VK_QUEUE_SPARSE_BINDING_BIT) & queueFamilyProperties[i].queueFlags);
 
 		if (!(VK_QUEUE_GRAPHICS_BIT & maskedFlags) && (VK_QUEUE_COMPUTE_BIT & maskedFlags)) {
 			*queueFamilyIndex = i;

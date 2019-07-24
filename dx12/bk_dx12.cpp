@@ -37,7 +37,7 @@ std::shared_ptr <DxInfo> dxInfo;
 // Compute root signature parameter offsets.
 enum ComputeRootParameters
 {
-	ComputeRootUAV=0,
+	ComputeRootUAV = 0,
 	ComputeRootParametersCount
 };
 const int32_t bufferLength = 16384;
@@ -45,7 +45,7 @@ const uint32_t bufferSize = sizeof(int32_t) * bufferLength;
 const uint32_t alignedBufferSize = AlignUp(bufferSize, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
 
 
-int DX12_init() {
+int DX12_init(unsigned char dev) {
 
 	traceEvent("DX Init");
 	dxInfo = std::make_shared<DxInfo>();
@@ -57,7 +57,7 @@ int DX12_init() {
 	debugInterface->EnableDebugLayer();
 #endif
 
-	ComPtr<IDXGIAdapter4>  adapter = GetAdapter(false);
+	ComPtr<IDXGIAdapter4>  adapter = GetAdapter(false, (dev + 1));
 	{
 		DXGI_ADAPTER_DESC1 dxgiAdapterDesc1;
 		adapter->GetDesc1(&dxgiAdapterDesc1);
@@ -76,7 +76,7 @@ int DX12_init() {
 		ThrowIfFailed(dxInfo->device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData)))
 
 
-		CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
+			CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
 		//Data out. Data is volatile and can be changed, exept when while shader is on a command list/bundle.
 		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 
@@ -90,8 +90,8 @@ int DX12_init() {
 		ComPtr<ID3DBlob> error;
 
 		auto res = D3DX12SerializeVersionedRootSignature(&computeRootSignatureDesc, featureData.HighestVersion, &signature, &error);
-		if (FAILED(res)){
-			if (error){
+		if (FAILED(res)) {
+			if (error) {
 				printf("Error description:\n%s", (LPCSTR)error->GetBufferPointer());
 			}
 			BAIL
@@ -120,7 +120,7 @@ int DX12_init() {
 	{
 		//we could read directly from computeUploadBuffer as a constant buffer from the shader. 
 		//Todo so, add  create add another computeRootParameter, create a constant buffer view, then SetComputeRootDescriptorTable.
-	    //however: D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT(4096)
+		//however: D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT(4096)
 		//so if >4096 elements, we can't use, and need to copy into another buffer.
 
 		ThrowIfFailed(dxInfo->device->CreateCommittedResource(

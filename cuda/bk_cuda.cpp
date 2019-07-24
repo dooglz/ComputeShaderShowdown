@@ -90,14 +90,14 @@ int numElements;
 size_t size;
 CUfunction kernel_addr;
 
-int CUDA_init() {
+int CUDA_init(unsigned char dev) {
 	traceEvent("CUDA Init");
 	{
 		int device_count = 0;
 		cudaDeviceProp deviceProp;
 		checkCudaErrors(cudaGetDeviceCount(&device_count));
 		BAIL_IF(device_count, 0)
-		int current_device = 0;
+			int current_device = 0;
 		while (current_device < device_count) {
 			cudaGetDeviceProperties(&deviceProp, current_device);
 			printf("GPU Device %d: \"%s\" with compute capability %d.%d\n\n", current_device, deviceProp.name, deviceProp.major, deviceProp.minor);

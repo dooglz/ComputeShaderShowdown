@@ -24,7 +24,7 @@ std::string toString(int dt) {
 	return s;
 }
 
-int OPENCL_init() {
+int OPENCL_init(unsigned char dev) {
 	traceEvent("CL Init");
 	cl_int err;
 	std::vector< cl::Platform > platformList;

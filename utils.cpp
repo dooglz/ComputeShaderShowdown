@@ -54,7 +54,7 @@ void traceEvent(const std::string& evntTxt)
 	EventWriteString(gEventHandle, 0, 0, toWide(evntTxt).data());
 #endif
 #if PIXEVENT
-	PIXSetMarker(PIX_COLOR(0, 128, 0) , evntTxt.data());
+	PIXSetMarker(PIX_COLOR(0, 128, 0), evntTxt.data());
 #endif
 }
 

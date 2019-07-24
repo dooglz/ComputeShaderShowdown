@@ -10,7 +10,8 @@
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>
-#define VALIDATION_LAYERS true
+#define VALIDATION_LAYERS 0
+#define DEBUG_EXT 0
 //#include <util_init.hpp>
 /*
  * A layer can expose extensions, keep track of those
@@ -33,16 +34,6 @@ typedef struct _swap_chain_buffers {
 
 
 struct sample_info {
-#ifdef _WIN32
-#define APP_NAME_STR_LEN 80
-	HINSTANCE connection;        // hInstance - Windows Instance
-	char name[APP_NAME_STR_LEN]; // Name to put on the window/icon
-	HWND window;                 // hWnd - window handle
-#endif // _WIN32
-	VkSurfaceKHR surface;
-	bool prepared;
-	bool use_staging_buffer;
-	bool save_images;
 
 	std::vector<const char*> instance_layer_names;
 	std::vector<const char*> instance_extension_names;
@@ -50,43 +41,18 @@ struct sample_info {
 	std::vector<VkExtensionProperties> instance_extension_properties;
 	VkInstance inst;
 
+	uint32_t computeQueueFamilyIndex;
+
 	std::vector<const char*> device_extension_names;
 	std::vector<VkExtensionProperties> device_extension_properties;
-	std::vector<VkPhysicalDevice> gpus;
-	std::vector <VkDevice> devices;
-	VkQueue graphics_queue;
-	VkQueue present_queue;
-	uint32_t graphics_queue_family_index;
-	uint32_t present_queue_family_index;
+	VkPhysicalDevice PhysicalDevice;
+	VkDevice device;
+
 	VkPhysicalDeviceProperties gpu_props;
 	std::vector<VkQueueFamilyProperties> queue_props;
 	VkPhysicalDeviceMemoryProperties memory_properties;
 
-	VkFramebuffer* framebuffers;
-	int width, height;
-	VkFormat format;
-
-	uint32_t swapchainImageCount;
-	VkSwapchainKHR swap_chain;
-	std::vector<swap_chain_buffer> buffers;
-	VkSemaphore imageAcquiredSemaphore;
-
 	VkCommandPool cmd_pool;
-
-	struct {
-		VkFormat format;
-
-		VkImage image;
-		VkDeviceMemory mem;
-		VkImageView view;
-	} depth;
-
-	struct {
-		VkBuffer buf;
-		VkDeviceMemory mem;
-		VkDescriptorBufferInfo buffer_info;
-	} uniform_data;
-
 	VkDeviceMemory stagingMemory;
 	VkImage stagingImage;
 
@@ -117,44 +83,40 @@ struct sample_info {
 
 	uint32_t current_buffer;
 	uint32_t queue_family_count;
-
-	VkViewport viewport;
-	VkRect2D scissor;
 };
 
 
 
 void go(sample_info& info);
 
- VkDebugReportCallbackEXT cb1;
+VkDebugReportCallbackEXT cb1;
 struct sample_info info = {};
 
- int VK_deInit(){
+int VK_deInit() {
 	if (VALIDATION_LAYERS)
 	{
-		PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
-		DestroyDebugReportCallback = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(info.inst, "vkDestroyDebugReportCallbackEXT"));
-		BAIL_IF(DestroyDebugReportCallback, VK_NULL_HANDLE);
-		DestroyDebugReportCallback(info.inst, cb1, NULL);
+		if (DEBUG_EXT) {
+			PFN_vkDestroyDebugReportCallbackEXT DestroyDebugReportCallback = VK_NULL_HANDLE;
+			DestroyDebugReportCallback = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(info.inst, "vkDestroyDebugReportCallbackEXT"));
+			BAIL_IF(DestroyDebugReportCallback, VK_NULL_HANDLE);
+			DestroyDebugReportCallback(info.inst, cb1, NULL);
+		}
 	}
 
-	for (const auto& d : info.devices) {
-		vkDestroyDevice(d, NULL);
-	}
-	info.devices.clear();
+	vkDestroyDevice(info.device, NULL);
 	vkDestroyInstance(info.inst, NULL);
 	return 0;
 }
 
-int VK_init() {
+int VK_init(unsigned char dev) {
 	traceEvent("VK Init");
 	// initialize the VkApplicationInfo structure
 	VkApplicationInfo app_info = {};
 	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	app_info.pNext = NULL;
-	app_info.pApplicationName = "Hello";
+	app_info.pApplicationName = "ShaderShowdown";
 	app_info.applicationVersion = 1;
-	app_info.pEngineName = "Hello";
+	app_info.pEngineName = "ShaderShowdown";
 	app_info.engineVersion = 1;
 	app_info.apiVersion = VK_API_VERSION_1_1;
 
@@ -174,9 +136,11 @@ int VK_init() {
 		inst_create_info.enabledLayerCount = 1;
 		constexpr char* vlayer = "VK_LAYER_LUNARG_standard_validation";
 		inst_create_info.ppEnabledLayerNames = &vlayer;
-		constexpr char* vExt = "VK_EXT_debug_report";
-		inst_create_info.ppEnabledExtensionNames = &vExt;
-		inst_create_info.enabledExtensionCount = 1;
+		if (DEBUG_EXT) {
+			constexpr char* vExt = "VK_EXT_debug_report";
+			inst_create_info.ppEnabledExtensionNames = &vExt;
+			inst_create_info.enabledExtensionCount = 1;
+		}
 	}
 
 	VkResult U_ASSERT_ONLY res;
@@ -186,40 +150,82 @@ int VK_init() {
 		std::cout << "cannot find a compatible Vulkan ICD\n";
 		exit(-1);
 	}
+	else if (res == VK_ERROR_LAYER_NOT_PRESENT) {
+		std::cout << "VK_ERROR_LAYER_NOT_PRESENT\n";
+		exit(-1);
+	}
 	else if (res) {
 		std::cout << "unknown error\n";
 		exit(-1);
 	}
 	std::cout << "Created VK Instance\n";
+
 	if (VALIDATION_LAYERS)
 	{
-		PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
-		CreateDebugReportCallback = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(info.inst, "vkCreateDebugReportCallbackEXT"));
-		BAIL_IF(CreateDebugReportCallback, VK_NULL_HANDLE);
+		if (DEBUG_EXT) {
+			PFN_vkCreateDebugReportCallbackEXT CreateDebugReportCallback = VK_NULL_HANDLE;
+			CreateDebugReportCallback = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(info.inst, "vkCreateDebugReportCallbackEXT"));
+			BAIL_IF(CreateDebugReportCallback, VK_NULL_HANDLE);
 
-		VkDebugReportCallbackCreateInfoEXT callback1 = {
-				VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,    // sType
-				NULL,                                                       // pNext
-				VK_DEBUG_REPORT_ERROR_BIT_EXT |                             // flags
-				VK_DEBUG_REPORT_WARNING_BIT_EXT,
-				messageCallback,                                        // pfnCallback
-				NULL                                                        // pUserData
-		};
-		BAIL_ON_BAD_RESULT(CreateDebugReportCallback(info.inst, &callback1, nullptr, &cb1));
-
+			VkDebugReportCallbackCreateInfoEXT callback1 = {
+					VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,    // sType
+					NULL,                                                       // pNext
+					VK_DEBUG_REPORT_ERROR_BIT_EXT |                             // flags
+					VK_DEBUG_REPORT_WARNING_BIT_EXT,
+					messageCallback,                                        // pfnCallback
+					NULL                                                        // pUserData
+			};
+			BAIL_ON_BAD_RESULT(CreateDebugReportCallback(info.inst, &callback1, nullptr, &cb1));
+		}
 	}
 
 	uint32_t gpu_count = 1;
 	res = vkEnumeratePhysicalDevices(info.inst, &gpu_count, NULL);
 	assert(gpu_count);
-	info.gpus.resize(gpu_count);
-	res = vkEnumeratePhysicalDevices(info.inst, &gpu_count, info.gpus.data());
+	assert(dev < gpu_count);
+	std::vector<VkPhysicalDevice> physdevs;
+	physdevs.resize(gpu_count);
+	res = vkEnumeratePhysicalDevices(info.inst, &gpu_count, physdevs.data());
 	assert(!res && gpu_count >= 1);
-	for (const auto g : info.gpus) {
+	for (const auto g : physdevs) {
 		VkPhysicalDeviceProperties dp;
 		vkGetPhysicalDeviceProperties(g, &dp);
 		std::cout << "Device " << dp.deviceID << " - " << dp.deviceName << " - " << dp.driverVersion << "\n";
 	}
+	//std::cout << "usign Device " << physdevs[dev].
+	info.PhysicalDevice = physdevs[dev];
+	//for (const auto& g : info.gpus) {
+
+	info.computeQueueFamilyIndex = 0;
+	BAIL_ON_BAD_RESULT(vkGetBestComputeQueueNPH(info.PhysicalDevice, &info.computeQueueFamilyIndex));
+	std::cout << "Using Queue " << info.computeQueueFamilyIndex << " For Compute work\n";
+	const float queuePrioritory = 1.0f;
+
+	VkDeviceQueueCreateInfo deviceQueueCreateInfo;
+	deviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	deviceQueueCreateInfo.pNext = nullptr;
+	deviceQueueCreateInfo.flags = 0;
+	deviceQueueCreateInfo.queueFamilyIndex = info.computeQueueFamilyIndex;
+	deviceQueueCreateInfo.queueCount = 1;
+	deviceQueueCreateInfo.pQueuePriorities = &queuePrioritory;
+
+	VkDeviceCreateInfo deviceCreateInfo = {};
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.pNext = nullptr;
+	deviceCreateInfo.flags = 0;
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &deviceQueueCreateInfo;
+	deviceCreateInfo.enabledLayerCount = 0;
+	deviceCreateInfo.ppEnabledLayerNames = 0;
+	deviceCreateInfo.enabledExtensionCount = 0;
+	deviceCreateInfo.ppEnabledExtensionNames = 0;
+	deviceCreateInfo.pEnabledFeatures = nullptr;
+
+	VkDevice device;
+	auto ret = vkCreateDevice(info.PhysicalDevice, &deviceCreateInfo, nullptr, &device);
+	BAIL_ON_BAD_RESULT(ret)
+		info.device = device;
+	std::cout << "Created Device " << device << "\n";
 
 	return 0;
 }
@@ -227,37 +233,7 @@ int VK_init() {
 
 
 void  VK_go(size_t runs) {
-	const VkPhysicalDevice& g = info.gpus[0];
-	//for (const auto& g : info.gpus) {
-	uint32_t queueFamilyIndex = 0;
-
-	BAIL_ON_BAD_RESULT(vkGetBestComputeQueueNPH(g, &queueFamilyIndex));
-	std::cout << "Using Queue " << queueFamilyIndex << " For Compute work\n";
-	const float queuePrioritory = 1.0f;
-	const VkDeviceQueueCreateInfo deviceQueueCreateInfo = {
-	  VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-	  0,
-	  0,
-	  queueFamilyIndex,
-	  1,
-	  &queuePrioritory
-	};
-
-	const VkDeviceCreateInfo deviceCreateInfo = {
-	  VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-	  0,
-	  0,
-	  1,
-	  &deviceQueueCreateInfo,
-	  0,0,0,0,0
-	};
-
-	VkDevice device;
-	BAIL_ON_BAD_RESULT(
-		vkCreateDevice(g, &deviceCreateInfo, 0, &device)
-	);
-	info.devices.push_back(device);
-	std::cout << "Created Device " << device << "\n";
+	const VkPhysicalDevice& g = info.PhysicalDevice;
 	VkPhysicalDeviceMemoryProperties properties;
 	vkGetPhysicalDeviceMemoryProperties(g, &properties);
 
@@ -289,7 +265,7 @@ void  VK_go(size_t runs) {
 	  memorySize,
 	  memoryTypeIndex
 	};
-
+	auto device = info.device;
 	VkDeviceMemory memory;
 	BAIL_ON_BAD_RESULT(vkAllocateMemory(device, &memoryAllocateInfo, 0, &memory));
 
@@ -298,7 +274,7 @@ void  VK_go(size_t runs) {
 		vkMapMemory(device, memory, 0, memorySize, 0, (void**)(&payload))
 	);
 	for (uint32_t k = 1; k < memorySize / sizeof(int32_t); k++) {
-		payload[k] = (k%10);//rand();
+		payload[k] = (k % 10);//rand();
 	}
 	vkUnmapMemory(device, memory);
 
@@ -310,7 +286,7 @@ void  VK_go(size_t runs) {
 	  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 	  VK_SHARING_MODE_EXCLUSIVE,
 	  1,
-	  &queueFamilyIndex
+	  &info.computeQueueFamilyIndex
 	};
 
 	VkBuffer in_buffer;
@@ -439,7 +415,7 @@ void  VK_go(size_t runs) {
 	VkCommandPoolCreateInfo commandPoolCreateInfo = {
 	  VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 	  0,0,
-	  queueFamilyIndex
+	  info.computeQueueFamilyIndex
 	};
 
 	VkDescriptorPoolSize descriptorPoolSize = {
@@ -532,7 +508,7 @@ void  VK_go(size_t runs) {
 	BAIL_ON_BAD_RESULT(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo));
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
 	vkCmdDispatch(commandBuffer, bufferSize / sizeof(int32_t), 1, 1);
 
@@ -541,7 +517,7 @@ void  VK_go(size_t runs) {
 	std::cout << "Ready To Dispatch\n";
 
 	VkQueue queue;
-	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+	vkGetDeviceQueue(device, info.computeQueueFamilyIndex, 0, &queue);
 
 	VkSubmitInfo submitInfo = {
 	  VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -557,7 +533,7 @@ void  VK_go(size_t runs) {
 	traceEvent("VK Start");
 	for (size_t i = 0; i < runs; i++)
 	{
-		std::cout << "Submit\n";
+		traceEvent("Submit");
 		auto t1 = std::chrono::high_resolution_clock::now();
 		BAIL_ON_BAD_RESULT(vkQueueSubmit(queue, 1, &submitInfo, 0));
 		BAIL_ON_BAD_RESULT(vkQueueWaitIdle(queue));
@@ -566,7 +542,7 @@ void  VK_go(size_t runs) {
 	}
 	traceEvent("VK End");
 
-	BAIL_ON_BAD_RESULT(vkMapMemory(device, memory, 0, memorySize, 0, (void**)&payload));
+	BAIL_ON_BAD_RESULT(vkMapMemory(device, memory, 0, memorySize, 0, (void**)& payload));
 	//std::cout << payload[0] << "," << payload[1] << "," << payload[2] << "," << payload[3] << std::endl;
 	std::cout << printSome(payload, bufferLength);
 	vkUnmapMemory(device, memory);
@@ -576,7 +552,7 @@ void  VK_go(size_t runs) {
 	vkDestroyDescriptorPool(device, descriptorPool, NULL);
 	vkDestroyPipeline(device, pipeline, NULL);
 	vkDestroyPipelineLayout(device, pipelineLayout, NULL);
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout,NULL);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
 	vkDestroyShaderModule(device, shader_module, NULL);
 	vkDestroyBuffer(device, in_buffer, NULL);
 	vkDestroyBuffer(device, out_buffer, NULL);
