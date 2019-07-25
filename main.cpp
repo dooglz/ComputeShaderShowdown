@@ -4,17 +4,17 @@
 #include "dx12/bk_dx12.h"
 #include "cuda/bk_cuda.h"
 #include "opencl/bk_opencl.h"
+#include "ss_RenderDoc.h"
 
-#define doVk 1
+#define doVk 0
 #define doDX12 0
 #define doCL 0
-#define doCU 0
-#define WAIT true
-#define useRD true
+#define doCU 1
+#define WAIT 1
+#define useRD 0
 
-#if useRD
-#include "ss_RenderDoc.h"
-#endif
+
+
 
 void wait() {
 	if (WAIT) {
@@ -42,8 +42,9 @@ int main(int argc, const char* const argv[]) {
 
 	if (doVk) {
 		std::cout << '\n' << std::string(80, '-') << "\nVULKAN\n";
-		VK_init(dev);
 		if (useRD) { RD_StartCapture(); }
+		VK_init(dev);
+		if (useRD) { RD_EndCapture(); RD_StartCapture(); }
 		VK_go(10);
 		if (useRD) { RD_EndCapture(); }
 		VK_deInit();
