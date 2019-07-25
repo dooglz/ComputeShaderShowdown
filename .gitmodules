@@ -1,0 +1,6 @@
+[submodule "deps/CLI11"]
+	path = deps/CLI11
+	url = https://github.com/CLIUtils/CLI11.git
+[submodule "deps/AMD-Opencl"]
+	path = deps/AMD-Opencl
+	url = https://github.com/GPUOpen-Tools/common-lib-amd-APPSDK-3.0.git

@@ -8,6 +8,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+option(ShdrShwdwn_getShadeRC "Get newest libs from github rather than relying on vulkanSDK" ON)
 
 option(ShdrShwdwn_CUDA "" ON)
 if(${ShdrShwdwn_CUDA})
@@ -21,18 +22,12 @@ endif(${ShdrShwdwn_CUDA})
 
 option(ShdrShwdwn_OPENCL "" ON)
 if(${ShdrShwdwn_OPENCL})
-	#find_package(OpenCL REQUIRED)
-	#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/opencl/common-lib-amd-APPSDK-3.0/")
-	#include(Global-OpenCL)
-	##
-	set(OPENCL_DIR "${CMAKE_SOURCE_DIR}/../OpenCL-ICD-Loader/build/Release")
-	set(OpenCL_LIBRARIES "${OPENCL_DIR}/OpenCL.lib")
-	set(OpenCL_INCLUDE_DIRS "${OPENCL_DIR}")
-	##
-	#set(OPENCL_DIR "${CMAKE_SOURCE_DIR}/opencl/common-lib-amd-APPSDK-3.0/3-0")
-	#set(OpenCL_LIBRARIES "${OPENCL_DIR}/lib/x86_64/OpenCL.lib")
-	#set(OpenCL_INCLUDE_DIRS "${OPENCL_DIR}/include")
-	##
+	#Using FindOpenCl usually ends at the CUDA install, which has old CL headders.
+	#I'm using this instead
+	set(OPENCL_DIR "${CMAKE_SOURCE_DIR}/deps/AMD-Opencl/3-0")
+	set(OpenCL_LIBRARIES ${OPENCL_DIR}/lib/x86_64/OpenCL.lib)
+	set(OpenCL_INCLUDE_DIRS "${OPENCL_DIR}/include")
+	
 	file(GLOB OPENCL_SOURCE_FILES opencl/*.cpp opencl/*.h)
 	source_group(OPENCL FILES ${OPENCL_SOURCE_FILES})
 	set(SOURCE_FILES ${SOURCE_FILES} ${OPENCL_SOURCE_FILES})
@@ -59,10 +54,40 @@ if(${ShdrShwdwn_DX12})
 endif(${ShdrShwdwn_DX12})
 
 
-
-
-
 add_executable(MAIN main.cpp utils.h utils.cpp ss_RenderDoc.cpp ss_RenderDoc.h ${SOURCE_FILES})
+
+
+#This could be a submodule, but due to its size we'll do it all here incase someone doesn't want it.
+if(${ShdrShwdwn_getShadeRC})
+	include(ExternalProject)
+	ExternalProject_Add ( ThirdParty_ShaderRC
+		PREFIX "${CMAKE_BINARY_DIR}/ShaderRC"
+		GIT_REPOSITORY "https://github.com/google/shaderc.git"
+		BINARY_DIR ${CMAKE_BINARY_DIR}/ShaderRCBuild
+		CONFIGURE_COMMAND 
+			py ${CMAKE_BINARY_DIR}/ShaderRC/src/ThirdParty_ShaderRC//utils/git-sync-deps &&
+			${CMAKE_COMMAND} ${CMAKE_BINARY_DIR}/ShaderRC/src/ThirdParty_ShaderRC 
+			-DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR><SOURCE_DIR>/ShaderRC # Tell CMake to use subdirectory as source.
+			-DSKIP_GLSLANG_INSTALL=ON
+			-DSKIP_SPIRV_TOOLS_INSTALL=ON
+			-DBUILD_GMOCK=OFF
+			-DBUILD_TESTING=OFF
+			-DSHADERC_SKIP_INSTALL=ON
+			-DSHADERC_SKIP_TESTS=ON
+			-Wno-dev
+		BUILD_COMMAND  ${CMAKE_COMMAND} --build . --target shaderc_shared --config $<CONFIG> 
+		INSTALL_COMMAND ""	
+		UPDATE_COMMAND "" 
+	)
+	add_dependencies(MAIN ThirdParty_ShaderRC)
+	target_link_libraries(MAIN ShaderRCBuild/libshaderc/$<CONFIG>/shaderc_shared)
+	add_custom_command(TARGET MAIN POST_BUILD     
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"ShaderRCBuild/libshaderc/$(Configuration)/shaderc_shared.dll"  
+		$<TARGET_FILE_DIR:MAIN>
+	)     
+endif(${ShdrShwdwn_getShadeRC})
+
 
 
 if(${ShdrShwdwn_DX12})
@@ -74,37 +99,8 @@ if(${ShdrShwdwn_VULKAN})
 	target_compile_definitions(MAIN PRIVATE VK_USE_PLATFORM_WIN32_KHR)
 	target_include_directories(MAIN PRIVATE Vulkan::Vulkan)
 	target_link_libraries(MAIN Vulkan::Vulkan)
-	#Also Link to compiled ShaderRC from VSDK (Could include() the Source Cmakelists but this is quicker)
-	#However VSDK doesn't ship with debug libs so in this case we need to build ourselves
-
-	get_filename_component(Vulkan_LIBRARY_DIR ${Vulkan_LIBRARY} DIRECTORY)  
-	option(ShdrShwdwn_BUILD_SHADERC "BUILD ShaderRC from scratch?" ${ShdrShwdwn_BUILD_SHADERC})
-	set(ShdrShwdwn_SHADERC_SRC_DIR "${Vulkan_LIBRARY_DIR}/../shaderc" CACHE FILEPATH "")
-	set(ShdrShwdwn_SHADERC_DIR "${Vulkan_LIBRARY_DIR}/shaderc_combined.lib" CACHE FILEPATH "")
-
-	if(${ShdrShwdwn_BUILD_SHADERC})
-	  message(STATUS "Configuring ShdrShwdwn to build ShaderRC.")
-	  set(SKIP_GLSLANG_INSTALL ON)
-	  set(SKIP_SPIRV_TOOLS_INSTALL ON)
-	  set(BUILD_GMOCK OFF)
-	  set(BUILD_TESTING OFF)
-	  set(SHADERC_SKIP_INSTALL ON)
-	  set(SHADERC_SKIP_TESTS ON)
-	  add_subdirectory(${ShdrShwdwn_SHADERC_SRC_DIR} "${CMAKE_BINARY_DIR}/bin" EXCLUDE_FROM_ALL)
-	  target_link_libraries(MAIN shaderc)
-	else()
-	  message(STATUS "Configuring ShdrShwdwn to avoid building ShaderRC.")
-	  target_link_libraries(MAIN 
-		debug "C:/VulkanSDK/shaderc-2019.0/build/libshaderc/Debug/shaderc_shared.lib"
-		optimized "C:/VulkanSDK/shaderc-2019.0/build/libshaderc/Release/shaderc_shared.lib"
-	  )
-		add_custom_command(TARGET MAIN POST_BUILD     
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"C:/VulkanSDK/shaderc-2019.0/build/libshaderc/$(Configuration)/shaderc_shared.dll"  
-			$<TARGET_FILE_DIR:MAIN>
-		)     
-	endif()
 endif(${ShdrShwdwn_VULKAN})
+
 
 if(${ShdrShwdwn_OPENCL})
 	target_include_directories(MAIN PRIVATE ${OpenCL_INCLUDE_DIRS})

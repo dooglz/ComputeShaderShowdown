@@ -8,8 +8,8 @@
 
 #define doVk 0
 #define doDX12 0
-#define doCL 0
-#define doCU 1
+#define doCL 1
+#define doCU 0
 #define WAIT 1
 #define useRD 0
 
