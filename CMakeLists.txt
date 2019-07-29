@@ -93,24 +93,27 @@ endif(${ShdrShwdwn_getShadeRC})
 if(${ShdrShwdwn_DX12})
 	target_include_directories(MAIN PRIVATE ${D3D12_INCLUDE_DIR} ${DXGI_INCLUDE_DIR})
 	target_link_libraries(MAIN ${D3D12_LIBRARY} ${DXGI_LIBRARY} ${D3DCOMPILER_LIBRARY})
+	add_compile_definitions("ss_compile_DX")
 endif(${ShdrShwdwn_DX12})
 
 if(${ShdrShwdwn_VULKAN})
 	target_compile_definitions(MAIN PRIVATE VK_USE_PLATFORM_WIN32_KHR)
 	target_include_directories(MAIN PRIVATE Vulkan::Vulkan)
 	target_link_libraries(MAIN Vulkan::Vulkan)
+	add_compile_definitions("ss_compile_VK")
 endif(${ShdrShwdwn_VULKAN})
-
 
 if(${ShdrShwdwn_OPENCL})
 	target_include_directories(MAIN PRIVATE ${OpenCL_INCLUDE_DIRS})
 	target_link_libraries(MAIN ${OpenCL_LIBRARIES})
+	add_compile_definitions("ss_compile_CL")
 endif(${ShdrShwdwn_OPENCL})
 
 if(${ShdrShwdwn_CUDA})
 	target_include_directories(MAIN PRIVATE ${CUDA_TOOLKIT_INCLUDE})
 	get_filename_component(CUDA_LIBRARY_DIR ${CUDA_CUDA_LIBRARY} DIRECTORY)  
 	target_link_libraries(MAIN ${CUDA_CUDART_LIBRARY} ${CUDA_CUDA_LIBRARY} "${CUDA_LIBRARY_DIR}/nvrtc.lib")
+	add_compile_definitions("ss_compile_CU")
 endif(${ShdrShwdwn_CUDA})
 
 if(${MSVC})
@@ -143,6 +146,7 @@ endif()
 ENDIF()
 
 
-
+add_subdirectory("deps/CLI11")
+target_link_libraries(MAIN  CLI11::CLI11)
 
 

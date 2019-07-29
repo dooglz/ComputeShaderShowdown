@@ -1,33 +1,67 @@
 #include <iostream>
 #include <string>
-#include "vulkan/bk_vulkan.h"
-#include "dx12/bk_dx12.h"
-#include "cuda/bk_cuda.h"
-#include "opencl/bk_opencl.h"
 #include "ss_RenderDoc.h"
 
-#define doVk 0
-#define doDX12 0
-#define doCL 1
-#define doCU 0
-#define WAIT 1
-#define useRD 0
+#ifdef ss_compile_VK
+#include "vulkan/bk_vulkan.h"
+#else
+#define DX12_init void(void);
+#endif
+
+#ifdef ss_compile_CL
+#include "opencl/bk_opencl.h"
+#endif 
+
+#ifdef ss_compile_CU
+#include "cuda/bk_cuda.h"
+#endif
+
+#ifdef ss_compile_DX
+#include "dx12/bk_dx12.h"
+#endif 
+
+#include "deps/CLI11/include/CLI/CLI.hpp"
 
 
-
-
+bool WAIT;
 void wait() {
 	if (WAIT) {
 		do {
-			std::cout << '\n' << "Press a key to continue...";
+			std::cout << '\n' << "Press Retrun to continue...";
 		} while (std::cin.get() != '\n');
 	}
 }
 
-int main(int argc, const char* const argv[]) {
-	(void)argc;
-	(void)argv;
+int main(int argc, char** argv) {
+	CLI::App app{ "Shader Showdown" };
 
+	bool doVk = false; 
+	bool doDX12 = false; 
+	bool doCL = false; 
+	bool doCU = false; 
+	bool useRD = false;
+
+	app.add_flag("--rd,--renderdoc", useRD, "load & use RenderDoc API");
+	app.add_flag("-w,--wait", WAIT, "prompt for user input between tests");
+
+
+#ifdef ss_compile_VK
+	app.add_flag("--vk,--vulkan", doVk, "Vulkan");
+#endif
+
+#ifdef ss_compile_CL
+	app.add_flag("--cl,--opencl", doCL, "CL");
+#endif 
+
+#ifdef ss_compile_CU
+	app.add_flag("--cu,--cuda", doCU, "CU");
+#endif 
+
+#ifdef ss_compile_DX
+	app.add_flag("--dx,--dx12", doDX12, "DX12");
+#endif 
+
+	CLI11_PARSE(app, argc, argv);
 	if (useRD) {
 		std::cout << "Inject RenderDoc now" << std::endl;
 		wait();
@@ -40,6 +74,7 @@ int main(int argc, const char* const argv[]) {
 	std::cin >> s;
 	dev = std::stoi(s);
 
+#ifdef ss_compile_VK
 	if (doVk) {
 		std::cout << '\n' << std::string(80, '-') << "\nVULKAN\n";
 		if (useRD) { RD_StartCapture(); }
@@ -50,6 +85,8 @@ int main(int argc, const char* const argv[]) {
 		VK_deInit();
 		wait();
 	}
+#endif 
+#ifdef ss_compile_DX
 	if (doDX12) {
 		std::cout << '\n' << std::string(80, '-') << "\nDX12\n";
 		DX12_init(dev);
@@ -57,6 +94,8 @@ int main(int argc, const char* const argv[]) {
 		DX12_deInit();
 		wait();
 	}
+#endif 
+#ifdef ss_compile_CL
 	if (doCL) {
 		std::cout << '\n' << std::string(80, '-') << "\nOPENCL\n";
 		OPENCL_init(dev);
@@ -64,6 +103,8 @@ int main(int argc, const char* const argv[]) {
 		OPENCL_deInit();
 		wait();
 	}
+#endif 
+#ifdef ss_compile_CU
 	if (doCU) {
 		std::cout << '\n' << std::string(80, '-') << "\nCUDA\n";
 		CUDA_init(dev);
@@ -71,6 +112,7 @@ int main(int argc, const char* const argv[]) {
 		CUDA_deInit();
 		wait();
 	}
+#endif 
 	wait();
 	return 0;
 }
