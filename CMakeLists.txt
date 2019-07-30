@@ -62,7 +62,7 @@ if(${ShdrShwdwn_getShadeRC})
 	include(ExternalProject)
 	ExternalProject_Add ( ThirdParty_ShaderRC
 		PREFIX "${CMAKE_BINARY_DIR}/ShaderRC"
-		GIT_REPOSITORY "https://github.com/google/shaderc.git"
+		GIT_REPOSITORY "https://github.com/dooglz/shaderc"
 		BINARY_DIR ${CMAKE_BINARY_DIR}/ShaderRCBuild
 		CONFIGURE_COMMAND 
 			py ${CMAKE_BINARY_DIR}/ShaderRC/src/ThirdParty_ShaderRC//utils/git-sync-deps &&
