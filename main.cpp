@@ -78,11 +78,8 @@ int main(int argc, char** argv) {
 		RD_init();
 	}
 
-	std::cout << "DEVICE?\n";
-	uint8_t dev;
-	std::string s = "10";
-	std::cin >> s;
-	dev = std::stoi(s);
+	uint8_t dev = 0;
+	app.add_option("-d,--device", dev, "Device to run on");
 
 #ifdef ss_compile_VK
 	if (doVk) {
