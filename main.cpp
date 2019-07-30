@@ -1,11 +1,12 @@
 #include <iostream>
 #include <string>
+
+#ifdef ss_compile_RD
 #include "ss_RenderDoc.h"
+#endif
 
 #ifdef ss_compile_VK
 #include "vulkan/bk_vulkan.h"
-#else
-#define DX12_init void(void);
 #endif
 
 #ifdef ss_compile_CL

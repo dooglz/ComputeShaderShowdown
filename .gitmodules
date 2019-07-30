@@ -4,3 +4,6 @@
 [submodule "deps/AMD-Opencl"]
 	path = deps/AMD-Opencl
 	url = https://github.com/GPUOpen-Tools/common-lib-amd-APPSDK-3.0.git
+[submodule "deps/DownloadProject"]
+	path = deps/DownloadProject
+	url = https://github.com/Crascit/DownloadProject

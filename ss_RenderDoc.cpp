@@ -1,6 +1,6 @@
 #include "ss_RenderDoc.h"
 //Look, I know I'm goin to be the only person who runs this code, shoot me
-#include "G:/renderdoc-1.x/renderdoc/api/app/renderdoc_app.h"
+#include <renderdoc/api/app/renderdoc_app.h>
 #include "utils.h"
 #define _AMD64_
 #include <Libloaderapi.h>

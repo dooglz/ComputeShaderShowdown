@@ -10,6 +10,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(ShdrShwdwn_getShadeRC "Get newest libs from github rather than relying on vulkanSDK" ON)
 
+option(ShdrShwdwn_EnableRenderDocAPI "" ON)
+
+
+
 option(ShdrShwdwn_CUDA "" ON)
 if(${ShdrShwdwn_CUDA})
 	#enable_language(CUDA)
@@ -60,9 +64,10 @@ add_executable(MAIN main.cpp utils.h utils.cpp ss_RenderDoc.cpp ss_RenderDoc.h $
 #This could be a submodule, but due to its size we'll do it all here incase someone doesn't want it.
 if(${ShdrShwdwn_getShadeRC})
 	include(ExternalProject)
+
 	ExternalProject_Add ( ThirdParty_ShaderRC
 		PREFIX "${CMAKE_BINARY_DIR}/ShaderRC"
-		GIT_REPOSITORY "https://github.com/dooglz/shaderc"
+		GIT_REPOSITORY "https://github.com/google/shaderc.git"
 		BINARY_DIR ${CMAKE_BINARY_DIR}/ShaderRCBuild
 		CONFIGURE_COMMAND 
 			py ${CMAKE_BINARY_DIR}/ShaderRC/src/ThirdParty_ShaderRC//utils/git-sync-deps &&
@@ -88,6 +93,24 @@ if(${ShdrShwdwn_getShadeRC})
 	)     
 endif(${ShdrShwdwn_getShadeRC})
 
+
+if(${ShdrShwdwn_EnableRenderDocAPI})
+	if (CMAKE_VERSION VERSION_LESS 3.2)
+		set(UPDATE_DISCONNECTED_IF_AVAILABLE "")
+	else()
+		set(UPDATE_DISCONNECTED_IF_AVAILABLE "UPDATE_DISCONNECTED 1")
+	endif()
+	include(deps/DownloadProject/DownloadProject.cmake)
+	download_project(
+		PROJ            renderdoc
+		GIT_REPOSITORY  https://github.com/baldurk/renderdoc.git
+		GIT_SHALLOW	    1
+		GIT_TAG			v1.x
+		${UPDATE_DISCONNECTED_IF_AVAILABLE}
+	)
+	target_include_directories(MAIN PRIVATE ${renderdoc_SOURCE_DIR})
+	add_compile_definitions("ss_compile_RD")
+endif(${ShdrShwdwn_EnableRenderDocAPI})
 
 
 if(${ShdrShwdwn_DX12})
