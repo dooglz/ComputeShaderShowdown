@@ -1,5 +1,6 @@
 #include "bk_opencl.h"
 #include "../utils.h"
+#include "../profiling/Profiling.h"
 #define CL_HPP_ENABLE_EXCEPTIONS
 //Because  Nvidia is lame
 #define CL_HPP_MINIMUM_OPENCL_VERSION 120
@@ -43,12 +44,13 @@ cl::Buffer outputBuffer;
 std::unique_ptr<cl::KernelFunctor<cl::Buffer, cl::Buffer >> kernelProgramFunc;
 
 int OPENCL_init(unsigned char dev) {
-	traceEvent("CL Init");
+	profiling::traceEvent("CL Init");
 	//cl_int err;
 
 	std::vector< cl::Platform > platformList;
 	cl::Platform::get(&platformList);
 	BAIL_IF(platformList.size(), 0);
+	assert(dev<platformList.size());
 
 	std::cout << platformList.size() << " OpenCL Platforms\n";
 
@@ -67,7 +69,13 @@ int OPENCL_init(unsigned char dev) {
 	}
 
 	platform = cl::Platform::setDefault(platformList[dev]);
-	device = cl::Device::getDefault();
+	{
+		std::vector<cl::Device> devices;
+		platform.getDevices(CL_DEVICE_TYPE_ALL,&devices);
+		BAIL_IF(devices.size(), 0);
+		device = cl::Device::setDefault(devices[0]);
+	}
+	//device = cl::Device::getDefault();
 	std::cout << "using " << device.getInfo<CL_DEVICE_NAME>() << std::endl;
 
 	std::string kernel{ R"(
@@ -77,7 +85,7 @@ int OPENCL_init(unsigned char dev) {
 		}
 	)" };
 
-	traceEvent("CL Compile Kernel");
+	profiling::traceEvent("CL Compile Kernel");
 	cl::Program kernelProgram(kernel);
 	try {
 		kernelProgram.build("-cl-std=CL1.2");
@@ -92,7 +100,7 @@ int OPENCL_init(unsigned char dev) {
 		BAIL
 	}
 
-	traceEvent("CL Compiled");
+	profiling::traceEvent("CL Compiled");
 
 	{
 		//Could extract binary here if you wanted
@@ -116,7 +124,7 @@ int OPENCL_init(unsigned char dev) {
 
 void OPENCL_go(size_t runs) {
 
-	traceEvent("CL Execute");
+	profiling::traceEvent("CL Execute");
 	const cl::EnqueueArgs launchArgs(bufferLength);
 	for (size_t i = 0; i < runs; i++)
 	{
@@ -126,7 +134,7 @@ void OPENCL_go(size_t runs) {
 		std::cout << "Done " << endtimer(t1) << "ns \n";
 	}
 
-	traceEvent("CL End");
+	profiling::traceEvent("CL End");
 	cl::copy(outputBuffer, begin(payload), end(payload));
 	std::cout << printSome(payload.data(), bufferLength);
 

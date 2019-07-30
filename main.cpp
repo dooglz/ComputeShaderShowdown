@@ -1,9 +1,9 @@
 #include <iostream>
 #include <string>
 
-#ifdef ss_compile_RD
-#include "ss_RenderDoc.h"
-#endif
+#include "profiling/Profiling.h"
+
+
 
 #ifdef ss_compile_VK
 #include "vulkan/bk_vulkan.h"
@@ -24,7 +24,7 @@
 #include "deps/CLI11/include/CLI/CLI.hpp"
 
 
-bool WAIT;
+bool WAIT = false;
 void wait() {
 	if (WAIT) {
 		do {
@@ -41,10 +41,18 @@ int main(int argc, char** argv) {
 	bool doCL = false;
 	bool doCU = false;
 	bool useRD = false;
+	bool useAMDTAL = false;
 	bool all = false;
-	app.add_flag("--rd,--renderdoc", useRD, "load & use RenderDoc API");
-	app.add_flag("-w,--wait", WAIT, "prompt for user input between tests");
 
+#ifdef ss_compile_RD
+	app.add_flag("--rd,--renderdoc", useRD, "load & use RenderDoc API");
+#endif
+
+#ifdef ss_compile_AMDTAL
+	app.add_flag("--codeXL,--amdtal,--AMDTActivityLogger", useAMDTAL, "load & use AMDTAL API");
+#endif
+
+	app.add_flag("-w,--wait", WAIT, "prompt for user input between tests");
 
 #ifdef ss_compile_VK
 	app.add_flag("--vk,--vulkan", doVk, "Vulkan");
@@ -63,6 +71,9 @@ int main(int argc, char** argv) {
 #endif 
 
 	app.add_flag("-a,--all", all, "run all ");
+	uint8_t dev = 0;
+	app.add_option("-d,--device", dev, "Device to run on");
+
 	CLI11_PARSE(app, argc, argv);
 
 	if (all) {
@@ -72,23 +83,18 @@ int main(int argc, char** argv) {
 		doCU = true;
 	}
 
-	if (useRD) {
-		std::cout << "Inject RenderDoc now" << std::endl;
-		wait();
-		RD_init();
-	}
+	profiling::init((useAMDTAL * profiling::AMDEVENT)| (useRD * profiling::RENDERDOC));
 
-	uint8_t dev = 0;
-	app.add_option("-d,--device", dev, "Device to run on");
 
 #ifdef ss_compile_VK
 	if (doVk) {
 		std::cout << '\n' << std::string(80, '-') << "\nVULKAN\n";
-		if (useRD) { RD_StartCapture(); }
+		profiling::startProfiling("Init");
 		VK_init(dev);
-		if (useRD) { RD_EndCapture(); RD_StartCapture(); }
+		profiling::endProfiling();
+		profiling::startProfiling("Go");
 		VK_go(10);
-		if (useRD) { RD_EndCapture(); }
+		profiling::endProfiling();
 		VK_deInit();
 		wait();
 	}
@@ -100,7 +106,7 @@ int main(int argc, char** argv) {
 		DX12_go(10);
 		DX12_deInit();
 		wait();
-}
+	}
 #endif 
 #ifdef ss_compile_CL
 	if (doCL) {

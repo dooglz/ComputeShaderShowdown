@@ -2,6 +2,9 @@
 
 ### A.K.A _Helloworld.comp_
 
+[![Build status](https://ci.appveyor.com/api/projects/status/s3mmps24jmjmx46v?svg=true)](https://ci.appveyor.com/project/dooglz/computeshadershowdown)
+
+
 This is a project to have a minimum working example of compute workloads across APIs.
 At present the app loads a big array of ints into the GPU, multiplies them, and reads them back.
 

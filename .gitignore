@@ -445,3 +445,5 @@ webserver/.vscode/launch.json
 webserver/
 .vscode/
 *.code-workspace
+
+profiling/*/*

@@ -7,56 +7,7 @@
 #include <sstream>
 
 #include <iostream>
-#define WINEVENT true
-#define PIXEVENT true
 
-#if WINEVENT
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <Evntprov.h>
-#include <Rpc.h>
-
-#if defined(min)
-#undef min
-#endif
-
-#if defined(max)
-#undef max
-#endif
-
-std::wstring toWide(const std::string& str) {
-	std::wstring str2(str.length(), L' ');
-	std::copy(str.begin(), str.end(), str2.begin());
-	return str2;
-}
-
-REGHANDLE getEventHanld(const std::string& guidStr) {
-	REGHANDLE gEventHandle;
-	GUID guid;
-	ASSERT_BAIL(UuidFromString(((RPC_CSTR)guidStr.data()), &guid) == RPC_S_OK);
-	EventRegister(&guid, nullptr, nullptr, &gEventHandle);
-	return gEventHandle;
-}
-#endif
-
-
-#if PIXEVENT
-#include "WinPixEventRuntime/pix3.h"
-#endif
-
-
-void traceEvent(const std::string& evntTxt)
-{
-
-	std::cout << "[TrcEvent] " << evntTxt << std::endl;
-#if WINEVENT
-	static REGHANDLE gEventHandle = getEventHanld("a0000aa0-e5ac-4f2f-be6a-42aad08a9c6f");
-	EventWriteString(gEventHandle, 0, 0, toWide(evntTxt).data());
-#endif
-#if PIXEVENT
-	PIXSetMarker(PIX_COLOR(0, 128, 0), evntTxt.data());
-#endif
-}
 
 
 std::chrono::time_point<chronoclock> startTimer() {

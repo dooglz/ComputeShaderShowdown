@@ -9,12 +9,13 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 option(ShdrShwdwn_getShadeRC "Get newest libs from github rather than relying on vulkanSDK" ON)
-
 option(ShdrShwdwn_EnableRenderDocAPI "" ON)
+option(ShdrShwdwn_EnableAMDTActivityLogger "" ON)
 
-
+set(ShdrShwdwn_AMDTActivityLogger_PATH "" CACHE FILEPATH "path to RCP/CXLActivityLogger Directory")
 
 option(ShdrShwdwn_CUDA "" ON)
+
 if(${ShdrShwdwn_CUDA})
 	#enable_language(CUDA)
 	find_package(CUDA REQUIRED)
@@ -57,6 +58,9 @@ if(${ShdrShwdwn_DX12})
 	set(SOURCE_FILES ${SOURCE_FILES} ${DX12_SOURCE_FILES})
 endif(${ShdrShwdwn_DX12})
 
+file(GLOB PROFILLING_SOURCE_FILES profiling/*.cpp profiling/*.h)
+source_group(PROFILLING FILES ${PROFILLING_SOURCE_FILES})
+set(SOURCE_FILES ${SOURCE_FILES} ${PROFILLING_SOURCE_FILES})
 
 add_executable(MAIN main.cpp utils.h utils.cpp ss_RenderDoc.cpp ss_RenderDoc.h ${SOURCE_FILES})
 
@@ -94,12 +98,13 @@ if(${ShdrShwdwn_getShadeRC})
 endif(${ShdrShwdwn_getShadeRC})
 
 
+if (CMAKE_VERSION VERSION_LESS 3.2)
+	set(UPDATE_DISCONNECTED_IF_AVAILABLE "")
+else()
+	set(UPDATE_DISCONNECTED_IF_AVAILABLE "UPDATE_DISCONNECTED 1")
+endif()
+
 if(${ShdrShwdwn_EnableRenderDocAPI})
-	if (CMAKE_VERSION VERSION_LESS 3.2)
-		set(UPDATE_DISCONNECTED_IF_AVAILABLE "")
-	else()
-		set(UPDATE_DISCONNECTED_IF_AVAILABLE "UPDATE_DISCONNECTED 1")
-	endif()
 	include(deps/DownloadProject/DownloadProject.cmake)
 	download_project(
 		PROJ            renderdoc
@@ -111,6 +116,26 @@ if(${ShdrShwdwn_EnableRenderDocAPI})
 	target_include_directories(MAIN PRIVATE ${renderdoc_SOURCE_DIR})
 	add_compile_definitions("ss_compile_RD")
 endif(${ShdrShwdwn_EnableRenderDocAPI})
+
+if(${ShdrShwdwn_EnableAMDTActivityLogger})
+	if(EXISTS "${ShdrShwdwn_AMDTActivityLogger_PATH}/include/CXLActivityLogger.h")
+
+		target_include_directories(MAIN PRIVATE "${ShdrShwdwn_AMDTActivityLogger_PATH}/include")
+		target_link_libraries(MAIN  "${ShdrShwdwn_AMDTActivityLogger_PATH}/bin/x86_64/CXLActivityLogger-x64.lib")
+		add_custom_command(TARGET MAIN POST_BUILD     
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+				"${ShdrShwdwn_AMDTActivityLogger_PATH}/bin/x86_64/CXLActivityLogger-x64.dll"  
+				$<TARGET_FILE_DIR:MAIN>
+		)     
+		add_compile_definitions("ss_compile_AMDTAL")
+	else()
+		message("Set ShdrShwdwn_AMDTActivityLogger_PATH to use AMDTAL")
+	endif()
+	
+	#add_library(AMDTAL ${AMDTActivityLogger_SOURCE_DIR}/AMDTActivityLogger.cpp)
+	#target_include_directories(AMDTAL PUBLIC ${AMDTActivityLogger_SOURCE_DIR})
+	#target_link_libraries(MAIN AMDTAL)
+endif(${ShdrShwdwn_EnableAMDTActivityLogger})
 
 
 if(${ShdrShwdwn_DX12})
