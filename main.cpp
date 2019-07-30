@@ -36,12 +36,12 @@ void wait() {
 int main(int argc, char** argv) {
 	CLI::App app{ "Shader Showdown" };
 
-	bool doVk = false; 
-	bool doDX12 = false; 
-	bool doCL = false; 
-	bool doCU = false; 
+	bool doVk = false;
+	bool doDX12 = false;
+	bool doCL = false;
+	bool doCU = false;
 	bool useRD = false;
-
+	bool all = false;
 	app.add_flag("--rd,--renderdoc", useRD, "load & use RenderDoc API");
 	app.add_flag("-w,--wait", WAIT, "prompt for user input between tests");
 
@@ -62,7 +62,16 @@ int main(int argc, char** argv) {
 	app.add_flag("--dx,--dx12", doDX12, "DX12");
 #endif 
 
+	app.add_flag("-a,--all", all, "run all ");
 	CLI11_PARSE(app, argc, argv);
+
+	if (all) {
+		doVk = true;
+		doDX12 = true;
+		doCL = true;
+		doCU = true;
+	}
+
 	if (useRD) {
 		std::cout << "Inject RenderDoc now" << std::endl;
 		wait();
@@ -94,7 +103,7 @@ int main(int argc, char** argv) {
 		DX12_go(10);
 		DX12_deInit();
 		wait();
-	}
+}
 #endif 
 #ifdef ss_compile_CL
 	if (doCL) {
