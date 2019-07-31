@@ -225,3 +225,8 @@ int CUDA_deInit() {
 	return 0;
 
 }
+
+int CUDA_runModule(const std::string& mod, size_t runs)
+{
+	return 0;
+}

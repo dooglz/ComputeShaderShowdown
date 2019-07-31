@@ -73,7 +73,8 @@ int main(int argc, char** argv) {
 	app.add_flag("-a,--all", all, "run all ");
 	uint8_t dev = 0;
 	app.add_option("-d,--device", dev, "Device to run on");
-
+	std::string modulepath = "";
+	app.add_option("-m,--module", modulepath, "Module to run on");
 	CLI11_PARSE(app, argc, argv);
 
 	if (all) {
@@ -112,7 +113,11 @@ int main(int argc, char** argv) {
 	if (doCL) {
 		std::cout << '\n' << std::string(80, '-') << "\nOPENCL\n";
 		OPENCL_init(dev);
-		OPENCL_go(10);
+		if (modulepath != "") {
+			OPENCL_runModule(modulepath,10);
+		}else{
+			OPENCL_go(10);
+		}
 		OPENCL_deInit();
 		wait();
 	}

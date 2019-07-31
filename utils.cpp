@@ -30,3 +30,8 @@ std::string printSome(int32_t* data, size_t length) {
 	return ss.str().substr(0, ss.str().length() - 2);
 }
 
+std::wstring toWide(const std::string& str) {
+	std::wstring str2(str.length(), L' ');
+	std::copy(str.begin(), str.end(), str2.begin());
+	return str2;
+}

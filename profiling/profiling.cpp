@@ -9,7 +9,7 @@
 
 
 #ifdef ss_compile_RD
-#include "../ss_RenderDoc.h"
+#include "ss_RenderDoc.h"
 #endif
 
 int APIS_INIT;
@@ -32,11 +32,7 @@ int APIS_INIT;
 #undef max
 #endif
 
-std::wstring toWide(const std::string& str) {
-	std::wstring str2(str.length(), L' ');
-	std::copy(str.begin(), str.end(), str2.begin());
-	return str2;
-}
+
 
 REGHANDLE getEventHanld(const std::string& guidStr) {
 	REGHANDLE gEventHandle;

@@ -39,3 +39,5 @@ template <typename T> __forceinline T AlignUp(T value, size_t alignment)
 std::chrono::time_point<chronoclock> startTimer();
 long long endtimer(std::chrono::time_point<chronoclock> tp);
 std::string printSome(int32_t* data, size_t length);
+
+std::wstring toWide(const std::string& str);

@@ -343,3 +343,8 @@ int DX12_deInit()
 	return 0;
 }
 
+int DX12_runModule(const std::string& mod, size_t runs)
+{
+	return 0;
+}
+

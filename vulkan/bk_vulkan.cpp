@@ -109,6 +109,11 @@ int VK_deInit() {
 	return 0;
 }
 
+int VK_runModule(const std::string& mod, size_t runs)
+{
+	return 0;
+}
+
 int VK_init(unsigned char dev) {
 	profiling::traceEvent("VK Init");
 	// initialize the VkApplicationInfo structure

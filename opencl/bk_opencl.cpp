@@ -1,5 +1,6 @@
 #include "bk_opencl.h"
 #include "../utils.h"
+
 #include "../profiling/Profiling.h"
 #define CL_HPP_ENABLE_EXCEPTIONS
 //Because  Nvidia is lame
@@ -7,6 +8,11 @@
 #define CL_HPP_TARGET_OPENCL_VERSION 120
 #define CL_TARGET_OPENCL_VERSION 120
 #include "../deps/AMD-Opencl/3-0/include/CL/cl2.hpp"
+
+#include "../module/module.h"
+#define CLMODULEDEFS 1
+#include "../module/module.defs.h"
+
 #include <iostream>
 #include <vector>
 
@@ -43,6 +49,8 @@ cl::Buffer outputBuffer;
 
 std::unique_ptr<cl::KernelFunctor<cl::Buffer, cl::Buffer >> kernelProgramFunc;
 
+void setup(cl::Platform& platform, cl::Device& device, size_t runs);
+
 int OPENCL_init(unsigned char dev) {
 	profiling::traceEvent("CL Init");
 	//cl_int err;
@@ -78,6 +86,11 @@ int OPENCL_init(unsigned char dev) {
 	//device = cl::Device::getDefault();
 	std::cout << "using " << device.getInfo<CL_DEVICE_NAME>() << std::endl;
 
+	return 0;
+
+}
+
+void setup(cl::Platform& platform, cl::Device& device,size_t runs) {
 	std::string kernel{ R"(
 		kernel void CSMain(global const int *input, global int *output)
 		{
@@ -117,13 +130,10 @@ int OPENCL_init(unsigned char dev) {
 	inputBuffer = cl::Buffer(CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, bufferSize, payload.data());
 	outputBuffer = cl::Buffer(CL_MEM_WRITE_ONLY, bufferSize);
 	kernelProgramFunc = std::make_unique<cl::KernelFunctor<cl::Buffer, cl::Buffer >>(kernelProgram, "CSMain");
-	return 0;
-
 }
 
-
 void OPENCL_go(size_t runs) {
-
+	setup(platform,device,0);
 	profiling::traceEvent("CL Execute");
 	const cl::EnqueueArgs launchArgs(bufferLength);
 	for (size_t i = 0; i < runs; i++)
@@ -139,6 +149,15 @@ void OPENCL_go(size_t runs) {
 	std::cout << printSome(payload.data(), bufferLength);
 
 }
+
 int OPENCL_deInit() {
+	return 0;
+}
+
+
+int OPENCL_runModule(const std::string& mod, size_t runs)
+{
+	ExternalModule m(mod);
+	execFunc(m, go_cl, platform, device, runs);
 	return 0;
 }

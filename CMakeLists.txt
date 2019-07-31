@@ -61,8 +61,11 @@ endif(${ShdrShwdwn_DX12})
 file(GLOB PROFILLING_SOURCE_FILES profiling/*.cpp profiling/*.h)
 source_group(PROFILLING FILES ${PROFILLING_SOURCE_FILES})
 set(SOURCE_FILES ${SOURCE_FILES} ${PROFILLING_SOURCE_FILES})
+file(GLOB MODULE_SOURCE_FILES module/*.cpp module/*.h)
+source_group(MODULE FILES ${MODULE_SOURCE_FILES})
+set(SOURCE_FILES ${SOURCE_FILES} ${MODULE_SOURCE_FILES})
 
-add_executable(MAIN main.cpp utils.h utils.cpp ss_RenderDoc.cpp ss_RenderDoc.h ${SOURCE_FILES})
+add_executable(MAIN main.cpp utils.h utils.cpp ${SOURCE_FILES})
 
 
 #This could be a submodule, but due to its size we'll do it all here incase someone doesn't want it.
