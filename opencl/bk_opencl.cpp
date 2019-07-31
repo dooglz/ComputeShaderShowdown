@@ -133,7 +133,7 @@ void OPENCL_go(size_t runs) {
 		(*kernelProgramFunc)(launchArgs, inputBuffer, outputBuffer);
 		std::cout << "Done " << endtimer(t1) << "ns \n";
 	}
-
+	clFinish(cl::CommandQueue::getDefault().get());
 	profiling::traceEvent("CL End");
 	cl::copy(outputBuffer, begin(payload), end(payload));
 	std::cout << printSome(payload.data(), bufferLength);
