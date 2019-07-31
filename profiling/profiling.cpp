@@ -104,8 +104,13 @@ void profiling::init(APIFLAGS api)
 
 void profiling::deInit()
 {
+#ifdef ss_compile_AMDTAL
+	if (APIS_INIT && AMDEVENT) {
 	auto res = amdtFinalizeActivityLogger();
 	assert(res == AL_SUCCESS);
+	//APIS_INIT ^= AMDEVENT;
+	}
+#endif
 }
 
 void profiling::startProfiling(const std::string& evntTxt, APIFLAGS api)
